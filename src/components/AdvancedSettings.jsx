@@ -9,7 +9,12 @@ import { DEFAULT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
  * Small ⓘ icon that shows a tooltip on hover, focus, and tap.
  * Positioned below-left of the icon so it doesn't overlap the input on the right.
  */
-function InfoTip({ text }) {
+/**
+ * `children` can be a plain string or JSX (paragraphs, lists, etc.).
+ * `className` overrides the tooltip bubble width — default `w-64`; pass
+ * `"w-80 max-w-[calc(100vw-2rem)]"` for longer content.
+ */
+function InfoTip({ children, className = "w-64" }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative inline-flex items-center ml-1">
@@ -30,9 +35,9 @@ function InfoTip({ text }) {
       {open && (
         <span
           role="tooltip"
-          className="absolute left-0 top-full mt-1.5 z-20 w-64 rounded-lg bg-zinc-800 px-3 py-2 text-xs leading-relaxed text-white shadow-lg"
+          className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3 py-2.5 text-xs leading-relaxed text-white shadow-lg ${className}`}
         >
-          {text}
+          {children}
         </span>
       )}
     </span>
@@ -46,7 +51,7 @@ function InfoTip({ text }) {
  * `scale` converts stored→display (percent fields ×100).
  * On blur / Enter, clamps to [min, max] and calls onChange(fieldKey, stored).
  */
-function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, value, onChange, tooltip }) {
+function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, value, onChange, tooltip, tooltipClassName }) {
   const displayed     = (value * scale).toFixed(precision);
   const [draft, setDraft] = useState(displayed);
   const prevDisplayed = useRef(displayed);
@@ -69,7 +74,7 @@ function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, 
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-100 last:border-0">
       <span className="text-sm text-zinc-600 leading-snug flex items-center">
         {label}
-        {tooltip && <InfoTip text={tooltip} />}
+        {tooltip && <InfoTip className={tooltipClassName}>{tooltip}</InfoTip>}
       </span>
       <div className="flex items-center gap-2 shrink-0">
         <input
@@ -177,6 +182,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           value={inputs.samPct}
           onChange={onChange}
           tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, creditworthy, etc. This is who you can actually convert."
+          tooltipClassName="w-64"
         />
         <DerivedField
           label="SAM # of Households"
@@ -245,11 +251,43 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
 
         <NumberField
           fieldKey="initialCPA"
-          label="Initial CPA"
+          label="Initial Cost Per (Active Member) Acquisition"
           unit="$ / active member"
           scale={1} precision={0} step={25} min={50} max={2000}
           value={inputs.initialCPA}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip={
+            <>
+              <p className="mb-2">
+                This is the cost to acquire an active member/household (with funded accounts and
+                consistent usage). The cost to acquire an active member will be higher than the cost
+                of acquisition overall because, especially for digital users, a significant number
+                will join but not fund accounts.
+              </p>
+              <ul className="list-disc list-outside pl-3.5 space-y-1.5 mb-2">
+                <li>
+                  Cornerstone Advisors&rsquo; annual &ldquo;What&rsquo;s Going On in Banking&rdquo; survey
+                  consistently shows credit union new-member CPA of $200&ndash;400, higher for funded accounts.
+                </li>
+                <li>
+                  Neobank S-1 filings (SoFi 2021, Chime disclosures) show CPA in the $280&ndash;350
+                  range before incentives.
+                </li>
+              </ul>
+              <p className="mb-2">
+                The above covers institutions with existing brand presence, established member trust,
+                and branch density to support the product. Most credit unions have none of those
+                advantages. This means that a $450 CPA is likely on the low end.
+              </p>
+              <p>
+                When setting this number, also consider who you are trying to acquire. High Net Worth
+                households make up a small portion of any addressable market, and they are much harder
+                to move. Consider significantly increasing Initial CPA and Steady-State CPA if you are
+                targeting High Net Worth households.
+              </p>
+            </>
+          }
         />
         <NumberField
           fieldKey="steadyStateCPA"
