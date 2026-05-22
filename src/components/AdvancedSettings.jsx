@@ -361,8 +361,43 @@ const SECTIONS = [
     id: "servicing",
     label: "Servicing Cost",
     fields: [
-      { key: "maintenanceTrad",                label: "Account Maintenance — Traditional",    unit: "$ / member / yr", scale: 1,   precision: 0,  step: 10,   min: 0,  max: 1000  },
-      { key: "maintenanceDigital",             label: "Account Maintenance — Digital",        unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 500   },
+      { key: "maintenanceTrad",    label: "Account Maintenance — Traditional",  unit: "$ / member / yr", scale: 1, precision: 0, step: 10, min: 0, max: 1000,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The <strong>fully-loaded</strong> annual cost of maintaining a branch-reliant member —
+              direct account operations plus allocated branch staff time, customer service overhead,
+              and inbound call center volume. Cornerstone Advisors and Filene Institute research
+              consistently puts this at $250–350/year per member when overhead is properly allocated.
+            </p>
+            <p>
+              Note: the NCUA&rsquo;s observed $148/year gap between hybrid and branch-heavy
+              institutions is a conservative floor, not the true traditional-vs-digital spread.
+              Hybrid CUs still carry significant branch overhead for their non-digital members,
+              which compresses their average below the true branch-member cost.
+            </p>
+          </>
+        ),
+      },
+      { key: "maintenanceDigital", label: "Account Maintenance — Digital",    unit: "$ / member / yr", scale: 1, precision: 0, step: 5,  min: 0, max: 500,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The annual cost of core account operations for a digital-only member: back-office
+              processing, compliance, and basic customer support. <strong>Do not include platform
+              infrastructure costs here</strong> — those are captured separately in the Digital
+              Platform Infrastructure field below.
+            </p>
+            <p>
+              Neobank unit economics typically show $50–100/year for this line item at scale.
+              The $95 default reflects a credit union that hasn&rsquo;t yet reached neobank-scale
+              digital efficiency.
+            </p>
+          </>
+        ),
+      },
       { key: "transactionCostTrad",            label: "Transaction Cost — Teller",            unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.25, min: 0,  max: 20    },
       { key: "transactionCostDigital",         label: "Transaction Cost — Digital",           unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.01, min: 0,  max: 5     },
       { key: "avgTellerTransactionsPerMonth",  label: "Avg Teller Transactions / Month",      unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10    },
