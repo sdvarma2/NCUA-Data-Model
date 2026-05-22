@@ -351,7 +351,7 @@ const SECTIONS = [
           </>
         ),
       },
-      { key: "avgLoanBalance",      label: "Avg Loan Balance",                               unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "avgLoanBalance",      label: "Average Loan Balance",                           unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
       { key: "rateCut",             label: "Rate Cut — Digital Loans",                        unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
       { key: "loanCannibRateA",     label: "Loan Cannibalization — Expansion Markets Only",   unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
       { key: "loanCannibRateB",     label: "Loan Cannibalization — All Markets",              unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },

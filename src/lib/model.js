@@ -25,7 +25,7 @@ export const DEFAULT_INPUTS = {
 
   // Loans
   loanPenetrationRate: 0.10,
-  avgLoanBalance: 22000,
+  avgLoanBalance: 10000,
   rateCut: 25,           // bps below standard rate offered to digital members
 
   // Cannibalization (applied to institution's existing balance sheet)
