@@ -3,6 +3,42 @@
 import { useRef, useState } from "react";
 import { DEFAULT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
 
+// ── Info tooltip ─────────────────────────────────────────────────────────────
+
+/**
+ * Small ⓘ icon that shows a tooltip on hover, focus, and tap.
+ * Positioned below-left of the icon so it doesn't overlap the input on the right.
+ */
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1">
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        aria-label="More information"
+        className="rounded-full text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400 transition-colors flex items-center justify-center w-4 h-4"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
+          <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-0 top-full mt-1.5 z-20 w-64 rounded-lg bg-zinc-800 px-3 py-2 text-xs leading-relaxed text-white shadow-lg"
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Shared field-row layout ───────────────────────────────────────────────────
 
 /**
@@ -10,7 +46,7 @@ import { DEFAULT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
  * `scale` converts stored→display (percent fields ×100).
  * On blur / Enter, clamps to [min, max] and calls onChange(fieldKey, stored).
  */
-function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, value, onChange }) {
+function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, value, onChange, tooltip }) {
   const displayed     = (value * scale).toFixed(precision);
   const [draft, setDraft] = useState(displayed);
   const prevDisplayed = useRef(displayed);
@@ -31,7 +67,10 @@ function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, 
 
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-100 last:border-0">
-      <span className="text-sm text-zinc-600 leading-snug">{label}</span>
+      <span className="text-sm text-zinc-600 leading-snug flex items-center">
+        {label}
+        {tooltip && <InfoTip text={tooltip} />}
+      </span>
       <div className="flex items-center gap-2 shrink-0">
         <input
           type="number"
@@ -132,14 +171,15 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
         />
         <NumberField
           fieldKey="samPct"
-          label="SAM as % of TAM"
+          label="Serviceable Addressable Market (SAM)"
           unit="% of TAM"
           scale={1} precision={0} step={5} min={5} max={100}
           value={inputs.samPct}
           onChange={onChange}
+          tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, creditworthy, etc. This is who you can actually convert."
         />
         <DerivedField
-          label="Serviceable Addressable Market (SAM)"
+          label="SAM # of Households"
           value={sam.toLocaleString()}
           unit="households"
         />
