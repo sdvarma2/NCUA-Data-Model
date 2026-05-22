@@ -54,7 +54,7 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.avgDepositBalance).toBe(18000);
     expect(DEFAULT_INPUTS.rateBump).toBe(50);
     expect(DEFAULT_INPUTS.ratePremiumDecay).toBe(10);
-    expect(DEFAULT_INPUTS.rateBumpFloor).toBe(0);
+    expect(DEFAULT_INPUTS.rateBumpFloor).toBe(25);
   });
 
   it("has expected loan defaults", () => {

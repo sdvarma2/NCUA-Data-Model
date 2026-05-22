@@ -21,7 +21,7 @@ export const DEFAULT_INPUTS = {
   avgDepositBalance: 18000,
   rateBump: 50,          // bps above standard rate offered to digital members
   ratePremiumDecay: 10,  // bps/year the premium erodes as competitors catch up
-  rateBumpFloor: 0,      // bps — decay stops here; 0 means the premium fully erodes
+  rateBumpFloor: 25,     // bps — decay stops here; rate advantage persists at this floor
 
   // Loans
   loanPenetrationRate: 0.40,
