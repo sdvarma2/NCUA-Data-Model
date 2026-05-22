@@ -319,9 +319,12 @@ const SECTIONS = [
     label: "Deposits",
     fields: [
       { key: "avgDepositBalance",  label: "Avg Deposit Balance",                              unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
-      { key: "rateBump",           label: "Initial Rate Bump",                                unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 300    },
-      { key: "ratePremiumDecay",   label: "Rate Bump Decay",                                  unit: "bps / yr",       scale: 1,   precision: 0, step: 1,    min: 0,     max: 50     },
-      { key: "rateBumpFloor",      label: "Rate Bump Floor",                                  unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
+      { key: "rateBump",         label: "Initial Rate Bump",  unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 300,
+        tooltip: "The Initial Rate Bump represents the premium you'll pay on deposits initially to attract new members." },
+      { key: "ratePremiumDecay", label: "Rate Bump Decay",    unit: "bps / yr", scale: 1, precision: 0, step: 1, min: 0, max: 50,
+        tooltip: "The Rate Bump Decay represents how many basis points per year you'll lower your deposit rate premium by." },
+      { key: "rateBumpFloor",    label: "Rate Bump Floor",    unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 200,
+        tooltip: "The Rate Bump Floor represents the lowest value your Rate Bump will decay to. When set to 0, the premium you pay over standard rates will decay each year until the rate matches your standard rates." },
       { key: "depositCannibRateA", label: "Deposit Cannibalization — Expansion Markets Only", unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
       { key: "depositCannibRateB", label: "Deposit Cannibalization — All Markets",            unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
     ],
@@ -383,6 +386,8 @@ function SectionBlock({ section, inputs, onChange }) {
             max={f.max}
             value={inputs[f.key]}
             onChange={onChange}
+            tooltip={f.tooltip}
+            tooltipClassName={f.tooltipClassName}
           />
         ))}
       </div>
