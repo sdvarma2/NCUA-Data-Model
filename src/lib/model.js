@@ -24,7 +24,7 @@ export const DEFAULT_INPUTS = {
   rateBumpFloor: 25,     // bps — decay stops here; rate advantage persists at this floor
 
   // Loans
-  loanPenetrationRate: 0.40,
+  loanPenetrationRate: 0.20,
   avgLoanBalance: 22000,
   rateCut: 25,           // bps below standard rate offered to digital members
 
