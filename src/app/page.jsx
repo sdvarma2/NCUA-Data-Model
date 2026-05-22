@@ -37,8 +37,14 @@ export default function Home() {
     setLevers((prev) => ({ ...prev, [id]: value }));
   }
 
+  /** Single-key override from Advanced Settings number/text fields. */
   function handleAdvancedChange(key, value) {
     setAdvancedOverrides((prev) => ({ ...prev, [key]: value }));
+  }
+
+  /** Multi-key batch override — used by preset toggles (Market Competitiveness). */
+  function handleAdvancedBatchChange(overrides) {
+    setAdvancedOverrides((prev) => ({ ...prev, ...overrides }));
   }
 
   // Merge DEFAULT_INPUTS with any user overrides from Advanced Settings
@@ -98,7 +104,11 @@ export default function Home() {
               <section className="space-y-6">
                 <ScenarioToggle scenario={scenario} onChange={setScenario} />
                 <ModelInputs levers={levers} onChange={handleLeverChange} />
-                <AdvancedSettings inputs={inputs} onChange={handleAdvancedChange} />
+                <AdvancedSettings
+                  inputs={inputs}
+                  onChange={handleAdvancedChange}
+                  onBatchChange={handleAdvancedBatchChange}
+                />
               </section>
 
               {/* Temporary readout — will be replaced by simulation UI in Steps 8–13 */}
@@ -107,9 +117,22 @@ export default function Home() {
                   <p className="font-semibold text-zinc-800 mb-2">
                     Simulation preview ({scenario === "scenario_a" ? "Expansion Markets Only" : "All Markets"})
                   </p>
-                  <p>Month 60 digital members: <span className="font-medium text-zinc-900">{activeSimulation[59].totalDigitalMembers.toLocaleString()}</span></p>
-                  <p>Month 60 cumulative net: <span className={`font-medium ${activeSimulation[59].cumulativeNetContribution >= 0 ? "text-emerald-700" : "text-red-600"}`}>${activeSimulation[59].cumulativeNetContribution.toLocaleString()}</span></p>
-                  <p>Break-even month: <span className="font-medium text-zinc-900">{activeSimulation.find(m => m.isBreakEvenMonth)?.month ?? "Not reached within 5 years"}</span></p>
+                  <p>Month 60 active members: <span className="font-medium text-zinc-900">{activeSimulation.months[59].totalActiveMembers.toLocaleString()}</span></p>
+                  <p>Month 60 cumulative net: <span className={`font-medium ${activeSimulation.months[59].cumulativeNetContribution >= 0 ? "text-emerald-700" : "text-red-600"}`}>${activeSimulation.months[59].cumulativeNetContribution.toLocaleString()}</span></p>
+                  <p>Break-even month: <span className="font-medium text-zinc-900">{activeSimulation.months.find(m => m.isBreakEvenMonth)?.month ?? "Not reached within 5 years"}</span></p>
+                  <p className="pt-1 text-zinc-500">
+                    Bass fit: p = {activeSimulation.calibration.p.toFixed(4)}, q = {activeSimulation.calibration.q.toFixed(3)}
+                    {" · "}
+                    <span className={
+                      activeSimulation.calibration.realismIndicator.overall === "green"  ? "text-emerald-700" :
+                      activeSimulation.calibration.realismIndicator.overall === "yellow" ? "text-amber-700"   :
+                      "text-red-600"
+                    }>
+                      {activeSimulation.calibration.realismIndicator.overall === "green"  ? "✓ Plausible"  :
+                       activeSimulation.calibration.realismIndicator.overall === "yellow" ? "⚠ Ambitious"  :
+                       "✗ Implausible"}
+                    </span>
+                  </p>
                 </section>
               )}
             </>

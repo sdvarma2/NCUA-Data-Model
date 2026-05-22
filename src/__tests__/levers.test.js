@@ -4,11 +4,17 @@ import { resolveInputs, LEVER_PRESETS, LEVER_DEFAULTS } from "@/lib/levers";
 // ─── LEVER_PRESETS shape ─────────────────────────────────────────────────────
 
 describe("LEVER_PRESETS", () => {
-  it("defines presets for all four levers", () => {
-    expect(LEVER_PRESETS).toHaveProperty("acquisitionAggression");
+  it("defines presets for rateCompetitiveness and memberProfile", () => {
     expect(LEVER_PRESETS).toHaveProperty("rateCompetitiveness");
     expect(LEVER_PRESETS).toHaveProperty("memberProfile");
-    expect(LEVER_PRESETS).toHaveProperty("marketOpportunity");
+  });
+
+  it("does not include acquisitionAggression (replaced by Bass model inputs)", () => {
+    expect(LEVER_PRESETS).not.toHaveProperty("acquisitionAggression");
+  });
+
+  it("does not include marketOpportunity (replaced by TAM/SAM in Advanced Settings)", () => {
+    expect(LEVER_PRESETS).not.toHaveProperty("marketOpportunity");
   });
 
   it("each lever has exactly three positions", () => {
@@ -17,10 +23,10 @@ describe("LEVER_PRESETS", () => {
     }
   });
 
-  it("acquisitionAggression positions are Conservative / Moderate / Aggressive", () => {
-    expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Conservative");
-    expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Moderate");
-    expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Aggressive");
+  it("rateCompetitiveness positions are Conservative / Moderate / Aggressive", () => {
+    expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Conservative");
+    expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Moderate");
+    expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Aggressive");
   });
 
   it("memberProfile positions are Mass Market / Balanced / Upmarket", () => {
@@ -29,44 +35,22 @@ describe("LEVER_PRESETS", () => {
     expect(LEVER_PRESETS.memberProfile).toHaveProperty("Upmarket");
   });
 
-  it("marketOpportunity positions are Single Metro / Multi-Metro / Multi-State", () => {
-    expect(LEVER_PRESETS.marketOpportunity).toHaveProperty("Single Metro");
-    expect(LEVER_PRESETS.marketOpportunity).toHaveProperty("Multi-Metro");
-    expect(LEVER_PRESETS.marketOpportunity).toHaveProperty("Multi-State");
-  });
-
-  it("Aggressive acquisition has higher monthlyMemberTarget than Conservative", () => {
-    const aggressive = LEVER_PRESETS.acquisitionAggression.Aggressive;
-    const conservative = LEVER_PRESETS.acquisitionAggression.Conservative;
-    expect(aggressive.monthlyMemberTarget).toBeGreaterThan(conservative.monthlyMemberTarget);
-  });
-
   it("Aggressive rate has higher rateBump than Conservative", () => {
-    const aggressive = LEVER_PRESETS.rateCompetitiveness.Aggressive;
+    const aggressive  = LEVER_PRESETS.rateCompetitiveness.Aggressive;
     const conservative = LEVER_PRESETS.rateCompetitiveness.Conservative;
     expect(aggressive.rateBump).toBeGreaterThan(conservative.rateBump);
   });
 
   it("Upmarket member profile has higher avgDepositBalance than Mass Market", () => {
-    const upmarket = LEVER_PRESETS.memberProfile.Upmarket;
+    const upmarket  = LEVER_PRESETS.memberProfile.Upmarket;
     const massMarket = LEVER_PRESETS.memberProfile["Mass Market"];
     expect(upmarket.avgDepositBalance).toBeGreaterThan(massMarket.avgDepositBalance);
-  });
-
-  it("Multi-State has larger addressableMarket than Single Metro", () => {
-    const multiState = LEVER_PRESETS.marketOpportunity["Multi-State"];
-    const single = LEVER_PRESETS.marketOpportunity["Single Metro"];
-    expect(multiState.addressableMarket).toBeGreaterThan(single.addressableMarket);
   });
 });
 
 // ─── LEVER_DEFAULTS ──────────────────────────────────────────────────────────
 
 describe("LEVER_DEFAULTS", () => {
-  it("defaults acquisitionAggression to Moderate", () => {
-    expect(LEVER_DEFAULTS.acquisitionAggression).toBe("Moderate");
-  });
-
   it("defaults rateCompetitiveness to Moderate", () => {
     expect(LEVER_DEFAULTS.rateCompetitiveness).toBe("Moderate");
   });
@@ -75,8 +59,12 @@ describe("LEVER_DEFAULTS", () => {
     expect(LEVER_DEFAULTS.memberProfile).toBe("Balanced");
   });
 
-  it("defaults marketOpportunity to Multi-Metro", () => {
-    expect(LEVER_DEFAULTS.marketOpportunity).toBe("Multi-Metro");
+  it("does not include acquisitionAggression", () => {
+    expect(LEVER_DEFAULTS).not.toHaveProperty("acquisitionAggression");
+  });
+
+  it("does not include marketOpportunity", () => {
+    expect(LEVER_DEFAULTS).not.toHaveProperty("marketOpportunity");
   });
 });
 
@@ -90,64 +78,37 @@ describe("resolveInputs", () => {
     }
   });
 
-  it("with empty levers, returns Moderate/Balanced/Multi-Metro preset values", () => {
+  it("includes new acquisition keys (tam, samPct, m12Target, m36Target, m60Target)", () => {
     const inputs = resolveInputs({});
-    const mod = LEVER_PRESETS.acquisitionAggression.Moderate;
-    expect(inputs.launchCPA).toBe(mod.launchCPA);
-    expect(inputs.monthlyMemberTarget).toBe(mod.monthlyMemberTarget);
+    expect(inputs).toHaveProperty("tam");
+    expect(inputs).toHaveProperty("samPct");
+    expect(inputs).toHaveProperty("m12Target");
+    expect(inputs).toHaveProperty("m36Target");
+    expect(inputs).toHaveProperty("m60Target");
   });
 
-  it("overrides acquisitionAggression when set to Aggressive", () => {
-    const inputs = resolveInputs({ acquisitionAggression: "Aggressive" });
-    const preset = LEVER_PRESETS.acquisitionAggression.Aggressive;
-    expect(inputs.launchCPA).toBe(preset.launchCPA);
-    expect(inputs.monthlyMemberTarget).toBe(preset.monthlyMemberTarget);
+  it("includes new CPA economics keys (initialCPA, steadyStateCPA, monthsToSteadyState)", () => {
+    const inputs = resolveInputs({});
+    expect(inputs).toHaveProperty("initialCPA");
+    expect(inputs).toHaveProperty("steadyStateCPA");
+    expect(inputs).toHaveProperty("monthsToSteadyState");
   });
 
-  it("overrides rateCompetitiveness when set to Conservative", () => {
-    const inputs = resolveInputs({ rateCompetitiveness: "Conservative" });
-    const preset = LEVER_PRESETS.rateCompetitiveness.Conservative;
-    expect(inputs.rateBump).toBe(preset.rateBump);
-    expect(inputs.rateCut).toBe(preset.rateCut);
-  });
-
-  it("overrides memberProfile when set to Upmarket", () => {
-    const inputs = resolveInputs({ memberProfile: "Upmarket" });
-    const preset = LEVER_PRESETS.memberProfile.Upmarket;
-    expect(inputs.avgDepositBalance).toBe(preset.avgDepositBalance);
-    expect(inputs.loanPenetrationRate).toBe(preset.loanPenetrationRate);
-  });
-
-  it("overrides marketOpportunity when set to Single Metro", () => {
-    const inputs = resolveInputs({ marketOpportunity: "Single Metro" });
-    const preset = LEVER_PRESETS.marketOpportunity["Single Metro"];
-    expect(inputs.addressableMarket).toBe(preset.addressableMarket);
-    expect(inputs.difficultyMultiplier).toBe(preset.difficultyMultiplier);
-  });
-
-  it("does not mutate DEFAULT_INPUTS", () => {
-    const before = { ...DEFAULT_INPUTS };
-    resolveInputs({ acquisitionAggression: "Aggressive", rateCompetitiveness: "Aggressive" });
-    expect(DEFAULT_INPUTS).toEqual(before);
-  });
-
-  it("non-lever inputs (e.g. maintenanceDigital) are preserved unchanged", () => {
-    const inputs = resolveInputs({ acquisitionAggression: "Aggressive" });
+  it("non-lever inputs are preserved unchanged", () => {
+    const inputs = resolveInputs({});
     expect(inputs.maintenanceDigital).toBe(DEFAULT_INPUTS.maintenanceDigital);
     expect(inputs.fraudCost).toBe(DEFAULT_INPUTS.fraudCost);
     expect(inputs.digitalAttritionYear1).toBe(DEFAULT_INPUTS.digitalAttritionYear1);
   });
 
-  it("multiple levers can be combined independently", () => {
-    const inputs = resolveInputs({
-      acquisitionAggression: "Conservative",
-      rateCompetitiveness:   "Aggressive",
-      memberProfile:         "Upmarket",
-      marketOpportunity:     "Multi-State",
-    });
-    expect(inputs.launchCPA).toBe(LEVER_PRESETS.acquisitionAggression.Conservative.launchCPA);
-    expect(inputs.rateBump).toBe(LEVER_PRESETS.rateCompetitiveness.Aggressive.rateBump);
-    expect(inputs.avgDepositBalance).toBe(LEVER_PRESETS.memberProfile.Upmarket.avgDepositBalance);
-    expect(inputs.addressableMarket).toBe(LEVER_PRESETS.marketOpportunity["Multi-State"].addressableMarket);
+  it("does not mutate DEFAULT_INPUTS", () => {
+    const before = { ...DEFAULT_INPUTS };
+    resolveInputs({ rateCompetitiveness: "Aggressive", memberProfile: "Upmarket" });
+    expect(DEFAULT_INPUTS).toEqual(before);
+  });
+
+  it("returns a new object distinct from DEFAULT_INPUTS", () => {
+    const inputs = resolveInputs({});
+    expect(inputs).not.toBe(DEFAULT_INPUTS);
   });
 });

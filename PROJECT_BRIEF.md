@@ -162,32 +162,92 @@ The primary interface exposes four high-level levers. Each maps to underlying va
 
 | Lever | Positions | Controls |
 |-------|-----------|---------|
-| **Acquisition aggression** | Conservative / Moderate / Aggressive | Launch CPA, monthly member target, launch duration, steady-state CPA |
+| **Market Competitiveness** | Low / Medium / High | Initial CPA, Steady-State CPA, Months to Reach Steady-State |
 | **Rate competitiveness** | Conservative / Moderate / Aggressive | Deposit rate bump, loan rate cut, rate decay |
 | **Target member profile** | Mass market / Balanced / Upmarket | Avg deposit balance, loan penetration, avg loan balance |
-| **Market opportunity** | Single metro / Multi-metro / Multi-state | Addressable market size, difficulty multiplier |
 
-### Market Opportunity Presets
-
-| Profile | Addressable market | Difficulty multiplier | Description |
-|---------|-------------------|----------------------|-------------|
-| Single metro | 150,000 | 1.2 | One major city, moderate competition |
-| Multi-metro regional | 500,000 | 1.0 | Several mid-size cities, typical competition |
-| Multi-state | 1,500,000 | 0.9 | Broad geography, lower average density, less saturation |
+> **Note:** The Acquisition aggression and Market opportunity levers from the original design have been replaced by the Bass model acquisition inputs. Market Competitiveness is the primary acquisition lever. The Bass model's p and q parameters are fitted automatically from the milestone targets — they are outputs of the calibration, not user inputs.
 
 ### Advanced Settings Variables (full detail)
 
 These are all exposed in the Advanced Settings panel with default values, source citations, and help text. The panel groups inputs into five sections. For each input, the UI displays the current numeric value, the source/evidence, and a brief explanation of what changing it does to the model output.
 
 #### Acquisition
-| Variable | Unit | Default | Evidence | Help text |
-|----------|------|---------|----------|-----------|
-| Launch CPA | $ / member | $400 | Cornerstone Advisors annual banking survey: existing-market CU CAC $200–400; expansion markets (no brand presence) at or above top of range. National digital brands (Ally, Marcus) disclosed $300–450 early-market CAC. | Cost to acquire each new digital member during the launch window. Higher in expansion markets because the CU has no name recognition. |
-| Launch duration | months | 12 | Reflects typical elevated-spend window for a new product launch. | How many months the launch CPA applies before dropping to steady-state CPA. |
-| Steady-state CPA | $ / member | $75 | Reflects organic/referral acquisition post-launch. | Cost per member after launch phase ends — lower due to word-of-mouth and established brand. |
-| Monthly new member target | members/month | 500 | Calibrated so a 5-year run reaches meaningful scale without instantly saturating addressable market. | Maximum new members per month. Actual may be lower if market saturation is approached. |
-| Addressable market size | households | 500,000 | Multi-metro default; see Market Opportunity presets. | Total pool of potential members. Growth slows as cumulative acquired approaches this ceiling. |
-| Market difficulty multiplier | 0.5× – 2.0× | 1.0× | Normalized to 1.0 for multi-metro; single metro is harder (1.2×), multi-state is easier (0.9×) due to less geographic saturation. | Scales the effective CPA up or down. A 1.2× multiplier means $400 launch CPA becomes $480. |
+
+The acquisition model uses two **independent curves** that interact only at the monthly spend output:
+
+- **Member growth** — a Bass diffusion model that describes how adoption spreads through the Serviceable Addressable Market over time, calibrated to user-specified milestones.
+- **CPA decay** — a logistic sigmoid that describes how cost per acquired member falls from a high early-market level to a stable steady-state as referrals and brand recognition grow.
+
+**Monthly acquisition spend = new members acquired (Bass) × CPA at that month (logistic).**
+Keeping the curves independent makes the model easier to audit, explain, and adjust independently.
+
+##### Market Definition
+
+| Variable | Unit | Default | Notes |
+|----------|------|---------|-------|
+| Market name / geography | text label | "Expansion Market" | Label only — appears in chart headers and summary outputs |
+| Total Addressable Market (TAM) | households | 500,000 | All households in the target geography |
+| SAM as % of TAM | % | 40% | Serviceable fraction: households that are eligible, reachable, and creditworthy. Derived SAM in households is displayed alongside but not directly editable. |
+
+**Derived and displayed (not editable):** SAM (households) = TAM × (SAM% / 100)
+
+##### Membership Milestones (targets-in, budget-out)
+
+Milestones are expressed as **net active members** — gross members acquired minus attrition to date. This means milestone calibration is coupled to the Retention inputs: changing year-1 attrition affects how many gross members must be acquired to hit a given active target.
+
+| Variable | Unit | Default | Notes |
+|----------|------|---------|-------|
+| Target active members — Month 12 | members | 3,000 | First-year milestone |
+| Target active members — Month 36 | members | 12,000 | Mid-term milestone |
+| Target active members — Month 60 | members | 22,000 | Five-year milestone |
+
+**Calibration approach:** Both Bass model parameters — p (innovation / external marketing influence) and q (imitation / word-of-mouth) — are free. The optimizer finds the (p, q) pair that minimizes weighted squared error across all three milestones simultaneously, with M60 weighted most heavily (it is the primary planning horizon), M36 second, M12 third:
+
+```
+minimize: 3·(active(60) − M60)² + 2·(active(36) − M36)² + 1·(active(12) − M12)²
+over: p ∈ [0.001, 0.05],  q ∈ [0.05, 0.80]
+```
+
+The fitted (p, q) values are not user-visible inputs — they are outputs fed into the Realism Indicator. The model makes no promise of hitting all three milestones exactly; the gap between predicted and target at each milestone is reported and interpreted as signal.
+
+**Validation flags displayed inline with each milestone:**
+
+| Condition | Flag | Message |
+|-----------|------|---------|
+| M12 / SAM > 20% | ⚠ Yellow | Unusually high first-year penetration for a new market entrant |
+| M36 / SAM > 40% | ⚠ Yellow | Very aggressive mid-term penetration |
+| M60 / SAM > 70% | ⚠ Yellow | Near-saturation implied — consider expanding SAM definition |
+| M36 < M12 or M60 < M36 | ✗ Red | Milestones must be non-decreasing |
+| Any milestone > SAM | ✗ Red | Target exceeds Serviceable Addressable Market |
+
+##### Acquisition Economics
+
+| Variable | Unit | Default | Evidence | Notes |
+|----------|------|---------|----------|-------|
+| Initial CPA | $ / active member | $450 | Cornerstone Advisors: new-market CU CAC $200–400; expansion markets at or above top of range. Digital-first launch overhead and low brand recognition push costs to the high end. | Cost per active member in the early market, before referral networks and brand recognition build. "Active" denominator accounts for early-cohort attrition — acquiring 100 people of whom 20 churn in month 1 means the effective CPA on the 80 who stay is higher than the nominal spend suggests. |
+| Steady-State CPA | $ / active member | $75 | Organic and referral-driven acquisition cost once product is established. | Floor CPA in mature market where word-of-mouth reduces marketing dependency. |
+| Months to Reach Steady-State | months | 24 | Typical brand-building horizon for a regional digital product launch. | The CPA logistic decay curve reaches ≈ Steady-State CPA at this month. Controls both the inflection point (at half this value) and the steepness of the middle decline. |
+| Market Competitiveness | Low / Medium / High | Medium | — | Applies a preset overlay to the three fields above immediately. User can then fine-tune individual fields independently. |
+
+**Market Competitiveness presets** — applied immediately when the toggle changes:
+
+| Setting | Initial CPA | Steady-State CPA | Months to Steady-State | Character |
+|---------|------------|-----------------|----------------------|-----------|
+| Low | $300 | $50 | 18 | Light competition; brand builds quickly, costs fall fast |
+| Medium | $450 | $75 | 24 | Typical regional market |
+| High | $650 | $110 | 36 | Heavy competition; costs stay elevated longer, CPA declines slowly |
+
+**CPA decay formula (logistic sigmoid):**
+```
+CPA(t) = steadyStateCPA + (initialCPA − steadyStateCPA) / (1 + e^(k × (t − t_mid)))
+
+where:
+  t_mid = monthsToSteadyState / 2     // inflection point — steepest decline here
+  k     = 8 / monthsToSteadyState     // steepness; ~95% of decay occurs within the target window
+```
+
+This produces the shape described: CPA lingers high in early months (market is unknown), accelerates downward through the middle period (referrals kick in), and tapers toward Steady-State. The logistic sigmoid is preferred over the Bass model for CPA decay because CPA is a cost phenomenon driven by diminishing marketing returns, not an adoption diffusion phenomenon — the parameterization maps directly to observable inputs (floor, ceiling, inflection timing).
 
 #### Deposits
 | Variable | Unit | Default | Evidence | Help text |
@@ -268,36 +328,89 @@ Before the animation, the Advanced Settings panel should display these "live" de
 ### Month object shape
 ```javascript
 {
-  month: 1,                        // 1–60
-  newMembersAcquired: 487,
-  totalDigitalMembers: 487,
-  cumulativeAcquisitionSpend: 73050,
+  month: 1,                           // 1–60
+
+  // Acquisition
+  newMembersGross: 512,               // gross new members this month (Bass curve derivative × SAM)
+  newMembersActive: 420,              // gross new minus immediate early-cohort attrition
+  totalActiveMembers: 420,            // cumulative net active (all cohorts minus attrition)
+  cpa: 438,                           // effective CPA this month (logistic decay)
+  monthlyAcquisitionSpend: 224256,    // newMembersGross × cpa
+  cumulativeAcquisitionSpend: 224256,
+  samPenetrationPct: 0.0021,          // totalActiveMembers / SAM
+
+  // Economics (unchanged structure)
   monthlyRatePremiumCost: 14230,
-  monthlyCannibalizationCost: 8940, // deposit + loan combined
-  depositCannibalizationCost: 5820, // shown separately in visualization
-  loanCannibalizationCost: 3120,    // shown separately in visualization
+  monthlyCannibalizationCost: 8940,   // deposit + loan combined
+  depositCannibalizationCost: 5820,
+  loanCannibalizationCost: 3120,
   monthlyServicingCostSavings: 6180,
-  monthlyGrossNII: 19928,          // net interest income earned on digital members
-  monthlyNetContribution: -89040,
-  cumulativeNetContribution: -89040,
-  cumulativeCannibalDrag: 8940,     // running total of cannibalization cost
-  marketPenetrationPct: 0.097,
+  monthlyGrossNII: 19928,
+  monthlyNetContribution: -238426,    // now includes monthlyAcquisitionSpend
+  cumulativeNetContribution: -238426,
+  cumulativeCannibalDrag: 8940,
+
   isBreakEvenMonth: false
 }
 ```
 
 ### Key functions
 
-**`runSimulation(institution, inputs, scenario)`**
-Returns the full 60-month array. Called once when user hits Play. Both scenarios computed simultaneously so switching scenarios replays instantly without recalculation.
+**`calibrateAcquisition(inputs)`** — called once before the simulation loop; returns calibration results consumed by `runSimulation`
+```
+// Step 1: compute SAM
+sam = inputs.tam * (inputs.samPct / 100)
 
-**`computeMonthlyAcquisition(month, inputs)`**
+// Step 2: define the weighted objective function
+// active(t, p, q) = Bass gross adoption curve × sam, then apply attrition
+// to get net active count at month t
+weights = { 60: 3, 36: 2, 12: 1 }
+loss(p, q) = sum over t in [12, 36, 60]:
+               weights[t] × (simulateNetActive(p, q, sam, inputs, t) − inputs.targets[t])²
+
+// Step 3: minimize loss over the search space using Nelder-Mead (or equivalent
+// derivative-free optimizer). Starting point: p=0.01, q=0.30.
+// Search bounds: p ∈ [0.001, 0.05],  q ∈ [0.05, 0.80]
+{ p, q } = minimize(loss)
+
+// Step 4: pre-compute the full 60-month Bass gross adoption curve
+// Closed-form:  F(t) = (1 − e^(−(p+q)t)) / (1 + (q/p)·e^(−(p+q)t))
+// newGross(t)   = max(0, (F(t) − F(t−1)) × sam)
+bassGrossCurve[1..60] = computeBassCurve(p, q, sam)
+
+// Step 5: compute milestone residuals (predicted − target, as % of target)
+residuals = {
+  12: (simulateNetActive(p, q, sam, inputs, 12) − inputs.m12Target) / inputs.m12Target,
+  36: (simulateNetActive(p, q, sam, inputs, 36) − inputs.m36Target) / inputs.m36Target,
+  60: (simulateNetActive(p, q, sam, inputs, 60) − inputs.m60Target) / inputs.m60Target,
+}
+
+// Step 6: compute realism indicator (see Realism Indicator spec below)
+realismIndicator = assessRealism(p, q, residuals)
+
+return { p, q, sam, bassGrossCurve, residuals, realismIndicator }
 ```
-cpa = month <= launchDuration ? launchCPA : steadyStateCPA
-cpa *= difficultyMultiplier
-newMembers = min(monthlyTarget, remainingAddressableMarket)
-acquisitionSpend = newMembers × cpa
+
+**Bass model reference ranges for digital financial products** (used by `assessRealism`):
+
+| Parameter | Green (typical) | Yellow (ambitious) | Red (implausible) |
+|-----------|----------------|-------------------|-------------------|
+| p (innovation) | 0.003 – 0.020 | 0.020 – 0.040 | > 0.040 |
+| q (imitation) | 0.15 – 0.45 | 0.45 – 0.65 | > 0.65 |
+| Milestone residual | < 10% off | 10 – 25% off | > 25% off |
+
+p reflects external marketing effectiveness; q reflects word-of-mouth strength. A regional CU launching a digital product with no existing brand outside its footprint will have low p. q in the 0.25–0.40 range is typical for consumer financial products with active referral programs.
+
+**`computeCPA(month, inputs)`**
 ```
+t_mid = inputs.monthsToSteadyState / 2
+k     = 8 / inputs.monthsToSteadyState
+return inputs.steadyStateCPA +
+       (inputs.initialCPA − inputs.steadyStateCPA) / (1 + Math.exp(k * (month − t_mid)))
+```
+
+**`runSimulation(institution, inputs, scenario)`**
+Calls `calibrateAcquisition(inputs)` first. The returned `bassGrossCurve` and `realismIndicator` are passed into the 60-month loop. Both scenarios are computed simultaneously so switching replays instantly without recalculation.
 
 **`computeCannibalCost(month, institution, inputs, scenario)`**
 ```
@@ -341,6 +454,62 @@ monthlyGrossNII = totalDigitalMembers × avgDepositBalance × (institution.hybri
 
 **`findBreakEven(monthlyArray)`**
 Returns the first month where `cumulativeNetContribution >= 0`, or null if not reached within 60 months.
+
+---
+
+## Acquisition Model Outputs
+
+The following outputs are derived from the acquisition model and displayed in the Advanced Settings panel and summary dashboard alongside the main simulation outputs.
+
+### Member Growth
+| Output | Description |
+|--------|-------------|
+| Month-by-month active member count | `totalActiveMembers` from each month object |
+| S-curve chart | Member growth plotted against SAM ceiling; M12/M36/M60 targets shown as markers; Bass model predicted values shown alongside — the gap between marker and curve is visible |
+| SAM penetration % at milestones | `samPenetrationPct` at months 12, 36, 60 |
+| Milestone residuals | Predicted vs. target at each milestone, shown as ± % |
+| Input validation flags | Yellow/red flags if targets are structurally unrealistic (SAM breach, non-monotone) |
+
+### Acquisition Cost
+| Output | Description |
+|--------|-------------|
+| Month-by-month CPA | `cpa` from each month object — shows the logistic decay from Initial to Steady-State |
+| Month-by-month marketing spend | `monthlyAcquisitionSpend` = gross members acquired × CPA |
+| Annual marketing spend | Sum of monthly spend for Years 1–5 |
+| Cumulative acquisition cost at milestones | `cumulativeAcquisitionSpend` at months 12, 36, 60 |
+
+### Realism Indicator
+
+Displayed prominently after calibration runs — this is one of the model's most distinctive outputs. It surfaces what the user's targets require in market-dynamics terms and whether those dynamics are plausible for a regional CU entering a new market.
+
+Three components, each with a Green / Yellow / Red status:
+
+**1. Model fit quality** — how closely does the best-fit Bass curve approximate the targets overall?
+- Computed as the root mean squared residual across all three milestones, as % of M60 target
+- Green: < 10% RMSE; Yellow: 10–25%; Red: > 25%
+- A poor fit (Red) means no single Bass curve can plausibly reconcile the three milestones — the targets imply a growth shape that doesn't match how markets behave
+
+**2. Parameter plausibility** — are the fitted p and q within observed ranges for digital financial product launches?
+- p (innovation / external marketing): Green 0.003–0.020; Yellow 0.020–0.040; Red > 0.040
+- q (imitation / word-of-mouth): Green 0.15–0.45; Yellow 0.45–0.65; Red > 0.65
+- Status is the worse of the two parameter assessments
+- Displayed with plain-English interpretation: e.g., "Your targets require word-of-mouth strength (q = 0.58) above typical for a regional financial product — achievable but requires an active referral program"
+
+**3. Milestone tension** — which specific milestone is hardest to reconcile with the Bass curve shape?
+- Shows the residual at each milestone: predicted vs. target as ± %
+- Highlights the milestone with the largest gap
+- Plain-English: e.g., "The Bass model predicts 9,400 active members at Month 36 vs. your target of 12,000 (+28%). Your mid-term target implies faster acceleration than your Year 1 and Year 5 targets suggest."
+
+The overall Realism Indicator status is the worst of the three components. All three are shown — the executive sees the full picture, not just a single traffic light.
+
+### Acquisition Summary (executive view)
+| Metric | Source |
+|--------|--------|
+| Total active members at Month 60 | `totalActiveMembers[59]` |
+| Total acquisition spend over 60 months | `cumulativeAcquisitionSpend[59]` |
+| Average blended CPA over 60 months | Total spend ÷ total gross members acquired |
+| SAM penetration at Month 60 | `samPenetrationPct[59]` |
+| Combined chart | Member growth and monthly acquisition spend on dual axes — shows the investment-to-growth relationship as the curves separate when spend efficiency improves |
 
 ---
 

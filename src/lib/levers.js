@@ -1,31 +1,17 @@
 import { DEFAULT_INPUTS } from "@/lib/model";
 
 /**
- * Maps each lever position to the model inputs it controls.
- * Moderate / Balanced / Multi-Metro positions match DEFAULT_INPUTS exactly.
+ * Strategy lever presets.
+ *
+ * NOTE: acquisitionAggression and marketOpportunity were removed — replaced by the
+ * Bass model acquisition inputs (milestones, TAM/SAM, CPA economics) and the
+ * Market Competitiveness preset toggle in Advanced Settings.
+ *
+ * rateCompetitiveness and memberProfile are preserved but currently hollowed out —
+ * resolveInputs returns DEFAULT_INPUTS unchanged. Reconnection deferred until
+ * post-calibration phase.
  */
 export const LEVER_PRESETS = {
-  acquisitionAggression: {
-    Conservative: {
-      launchCPA: 250,
-      steadyStateCPA: 50,
-      monthlyMemberTarget: 250,
-      launchDuration: 18,
-    },
-    Moderate: {
-      launchCPA: 400,
-      steadyStateCPA: 75,
-      monthlyMemberTarget: 500,
-      launchDuration: 12,
-    },
-    Aggressive: {
-      launchCPA: 600,
-      steadyStateCPA: 100,
-      monthlyMemberTarget: 1000,
-      launchDuration: 6,
-    },
-  },
-
   rateCompetitiveness: {
     Conservative: {
       rateBump: 25,
@@ -61,29 +47,11 @@ export const LEVER_PRESETS = {
       avgLoanBalance: 40000,
     },
   },
-
-  // Per PROJECT_BRIEF.md §Market Opportunity Presets
-  marketOpportunity: {
-    "Single Metro": {
-      addressableMarket: 150000,
-      difficultyMultiplier: 1.2,
-    },
-    "Multi-Metro": {
-      addressableMarket: 500000,
-      difficultyMultiplier: 1.0,
-    },
-    "Multi-State": {
-      addressableMarket: 1500000,
-      difficultyMultiplier: 0.9,
-    },
-  },
 };
 
 export const LEVER_DEFAULTS = {
-  acquisitionAggression: "Moderate",
-  rateCompetitiveness:   "Moderate",
-  memberProfile:         "Balanced",
-  marketOpportunity:     "Multi-Metro",
+  rateCompetitiveness: "Moderate",
+  memberProfile:       "Balanced",
 };
 
 /**

@@ -1,76 +1,21 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { DEFAULT_INPUTS } from "@/lib/model";
+import { DEFAULT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
 
-// Each field: key matches DEFAULT_INPUTS, scale converts stored→display (pct fields: ×100)
-const SECTIONS = [
-  {
-    id: "acquisition",
-    label: "Acquisition",
-    fields: [
-      { key: "launchCPA",                   label: "Launch CPA",                         unit: "$ / member",     scale: 1,   precision: 0,  step: 25,   min: 50,    max: 2000    },
-      { key: "launchDuration",              label: "Launch duration",                    unit: "months",         scale: 1,   precision: 0,  step: 1,    min: 1,     max: 36      },
-      { key: "steadyStateCPA",             label: "Steady-state CPA",                   unit: "$ / member",     scale: 1,   precision: 0,  step: 5,    min: 10,    max: 500     },
-      { key: "monthlyMemberTarget",         label: "Monthly member target",              unit: "members / mo",   scale: 1,   precision: 0,  step: 50,   min: 50,    max: 10000   },
-      { key: "addressableMarket",           label: "Addressable market",                 unit: "households",     scale: 1,   precision: 0,  step: 50000,min: 50000, max: 5000000 },
-      { key: "difficultyMultiplier",        label: "Market difficulty multiplier",        unit: "×",              scale: 1,   precision: 1,  step: 0.1,  min: 0.5,   max: 3.0     },
-    ],
-  },
-  {
-    id: "deposits",
-    label: "Deposits",
-    fields: [
-      { key: "avgDepositBalance",           label: "Avg deposit balance",                unit: "$ / member",     scale: 1,   precision: 0,  step: 500,  min: 1000,  max: 100000  },
-      { key: "rateBump",                    label: "Rate bump — digital deposits",        unit: "bps",            scale: 1,   precision: 0,  step: 5,    min: 0,     max: 300     },
-      { key: "ratePremiumDecay",            label: "Rate premium decay",                  unit: "bps / yr",       scale: 1,   precision: 0,  step: 1,    min: 0,     max: 50      },
-      { key: "depositCannibRateA",          label: "Deposit cannibalization — Scenario A",unit: "% / yr",         scale: 100, precision: 1,  step: 0.1,  min: 0,     max: 25      },
-      { key: "depositCannibRateB",          label: "Deposit cannibalization — Scenario B",unit: "% / yr",         scale: 100, precision: 1,  step: 0.5,  min: 0,     max: 50      },
-    ],
-  },
-  {
-    id: "loans",
-    label: "Loans",
-    fields: [
-      { key: "loanPenetrationRate",         label: "Loan penetration rate",               unit: "% of members",   scale: 100, precision: 0,  step: 1,    min: 0,     max: 100     },
-      { key: "avgLoanBalance",              label: "Avg loan balance",                    unit: "$ / borrower",   scale: 1,   precision: 0,  step: 500,  min: 1000,  max: 100000  },
-      { key: "rateCut",                     label: "Rate cut — digital loans",             unit: "bps",            scale: 1,   precision: 0,  step: 5,    min: 0,     max: 200     },
-      { key: "loanCannibRateA",             label: "Loan cannibalization — Scenario A",    unit: "% / yr",         scale: 100, precision: 2,  step: 0.05, min: 0,     max: 25      },
-      { key: "loanCannibRateB",             label: "Loan cannibalization — Scenario B",    unit: "% / yr",         scale: 100, precision: 1,  step: 0.5,  min: 0,     max: 50      },
-    ],
-  },
-  {
-    id: "servicing",
-    label: "Servicing Cost",
-    fields: [
-      { key: "maintenanceTrad",             label: "Account maintenance — traditional",   unit: "$ / member / yr", scale: 1,  precision: 0,  step: 10,   min: 0,     max: 1000    },
-      { key: "maintenanceDigital",          label: "Account maintenance — digital",       unit: "$ / member / yr", scale: 1,  precision: 0,  step: 5,    min: 0,     max: 500     },
-      { key: "transactionCostTrad",         label: "Transaction cost — teller",           unit: "$ / transaction", scale: 1,  precision: 2,  step: 0.25, min: 0,     max: 20      },
-      { key: "transactionCostDigital",      label: "Transaction cost — digital",          unit: "$ / transaction", scale: 1,  precision: 2,  step: 0.01, min: 0,     max: 5       },
-      { key: "avgTellerTransactionsPerMonth",label: "Avg teller transactions / month",    unit: "txns / mo",       scale: 1,  precision: 3,  step: 0.083,min: 0,     max: 10      },
-      { key: "avgDigitalTransactionsPerMonth",label: "Avg digital transactions / month",  unit: "txns / mo",       scale: 1,  precision: 0,  step: 1,    min: 0,     max: 100     },
-      { key: "platformCost",                label: "Digital platform infrastructure",     unit: "$ / member / yr", scale: 1,  precision: 0,  step: 5,    min: 0,     max: 200     },
-      { key: "fraudCost",                   label: "Digital fraud & ID verification",     unit: "$ / member / yr", scale: 1,  precision: 0,  step: 1,    min: 0,     max: 100     },
-      { key: "costPerBranchVisit",          label: "Cost per branch visit",               unit: "$ / visit",       scale: 1,  precision: 2,  step: 0.5,  min: 0,     max: 50      },
-      { key: "freeVisits",                  label: "Free branch visits / yr",             unit: "visits / yr",     scale: 1,  precision: 0,  step: 1,    min: 0,     max: 12      },
-    ],
-  },
-  {
-    id: "retention",
-    label: "Retention",
-    fields: [
-      { key: "digitalAttritionYear1",       label: "Digital attrition — year 1",          unit: "% / yr",         scale: 100, precision: 0,  step: 1,    min: 0,     max: 100     },
-      { key: "digitalAttritionSteadyState", label: "Digital attrition — steady state",    unit: "% / yr",         scale: 100, precision: 0,  step: 1,    min: 0,     max: 100     },
-    ],
-  },
-];
+// ── Shared field-row layout ───────────────────────────────────────────────────
 
+/**
+ * Numeric input field with draft state.
+ * `scale` converts stored→display (percent fields ×100).
+ * On blur / Enter, clamps to [min, max] and calls onChange(fieldKey, stored).
+ */
 function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, value, onChange }) {
-  const displayed = (value * scale).toFixed(precision);
+  const displayed     = (value * scale).toFixed(precision);
   const [draft, setDraft] = useState(displayed);
   const prevDisplayed = useRef(displayed);
 
-  // Sync draft when external value changes (e.g., reset to defaults)
+  // Sync draft when external value changes (e.g., reset or preset applied)
   if (prevDisplayed.current !== displayed) {
     prevDisplayed.current = displayed;
     setDraft(displayed);
@@ -78,13 +23,10 @@ function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, 
 
   function commit() {
     const n = parseFloat(draft);
-    if (isNaN(n)) {
-      setDraft(displayed);
-      return;
-    }
+    if (isNaN(n)) { setDraft(displayed); return; }
     const clamped = Math.max(min, Math.min(max, n));
     onChange(fieldKey, clamped / scale);
-    setDraft((clamped).toFixed(precision));
+    setDraft(clamped.toFixed(precision));
   }
 
   return (
@@ -105,6 +47,242 @@ function NumberField({ fieldKey, label, unit, scale, precision, step, min, max, 
     </div>
   );
 }
+
+/**
+ * Free-text input field (e.g. market name).
+ */
+function TextField({ fieldKey, label, value, onChange }) {
+  const [draft, setDraft] = useState(value ?? "");
+  const prevValue = useRef(value);
+
+  if (prevValue.current !== value) {
+    prevValue.current = value;
+    setDraft(value ?? "");
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-100 last:border-0">
+      <span className="text-sm text-zinc-600 leading-snug">{label}</span>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => onChange(fieldKey, draft)}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        className="w-48 text-right text-sm rounded border border-zinc-400 px-2 py-1.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-zinc-500 bg-white text-zinc-900"
+      />
+    </div>
+  );
+}
+
+/**
+ * Read-only derived value row (no input; shows a computed result).
+ */
+function DerivedField({ label, value, unit }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-100 last:border-0">
+      <span className="text-sm text-zinc-500 leading-snug italic">{label}</span>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="w-24 text-right text-sm text-zinc-500 font-medium">{value}</span>
+        <span className="text-xs text-zinc-500 w-24 leading-tight">{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Acquisition section ───────────────────────────────────────────────────────
+
+const MC_OPTIONS = [
+  { label: "Low",    preset: MARKET_COMPETITIVENESS_PRESETS.Low    },
+  { label: "Medium", preset: MARKET_COMPETITIVENESS_PRESETS.Medium },
+  { label: "High",   preset: MARKET_COMPETITIVENESS_PRESETS.High   },
+];
+
+function AcquisitionSection({ inputs, onChange, onBatchChange }) {
+  const sam = Math.round(inputs.tam * (inputs.samPct / 100));
+
+  // Determine active Market Competitiveness position by matching initialCPA exactly
+  const activeMC = MC_OPTIONS.find((o) => o.preset.initialCPA === inputs.initialCPA)?.label ?? null;
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 mb-1 pt-4">
+        Acquisition
+      </h3>
+      <div className="rounded-lg border border-zinc-200 bg-white px-4 divide-y-0">
+
+        {/* ── Market Definition ──────────────────────────────────── */}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+          Market Definition
+        </p>
+
+        <TextField
+          fieldKey="marketName"
+          label="Market name / geography"
+          value={inputs.marketName}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="tam"
+          label="Total Addressable Market (TAM)"
+          unit="households"
+          scale={1} precision={0} step={50000} min={50000} max={5000000}
+          value={inputs.tam}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="samPct"
+          label="SAM as % of TAM"
+          unit="% of TAM"
+          scale={1} precision={0} step={5} min={5} max={100}
+          value={inputs.samPct}
+          onChange={onChange}
+        />
+        <DerivedField
+          label="Serviceable Addressable Market (SAM)"
+          value={sam.toLocaleString()}
+          unit="households"
+        />
+
+        {/* ── Membership Milestones ──────────────────────────────── */}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+          Membership Milestones (net active members)
+        </p>
+
+        <NumberField
+          fieldKey="m12Target"
+          label="Target active members — Month 12"
+          unit="members"
+          scale={1} precision={0} step={250} min={0} max={500000}
+          value={inputs.m12Target}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="m36Target"
+          label="Target active members — Month 36"
+          unit="members"
+          scale={1} precision={0} step={500} min={0} max={500000}
+          value={inputs.m36Target}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="m60Target"
+          label="Target active members — Month 60"
+          unit="members"
+          scale={1} precision={0} step={1000} min={0} max={500000}
+          value={inputs.m60Target}
+          onChange={onChange}
+        />
+
+        {/* ── Acquisition Economics ──────────────────────────────── */}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+          Acquisition Economics
+        </p>
+
+        {/* Market Competitiveness preset toggle */}
+        <div className="py-2.5 border-b border-zinc-100">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="text-sm text-zinc-600 leading-snug">Market Competitiveness</span>
+            <span className="text-xs text-zinc-400 leading-tight w-24 text-right">preset</span>
+          </div>
+          <div className="flex gap-1.5">
+            {MC_OPTIONS.map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => onBatchChange(opt.preset)}
+                className={`flex-1 text-xs font-medium py-2 px-3 rounded border transition-colors min-h-[44px] ${
+                  activeMC === opt.label
+                    ? "bg-zinc-800 text-white border-zinc-800"
+                    : "bg-white text-zinc-600 border-zinc-300 hover:border-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <NumberField
+          fieldKey="initialCPA"
+          label="Initial CPA"
+          unit="$ / active member"
+          scale={1} precision={0} step={25} min={50} max={2000}
+          value={inputs.initialCPA}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="steadyStateCPA"
+          label="Steady-State CPA"
+          unit="$ / active member"
+          scale={1} precision={0} step={5} min={10} max={500}
+          value={inputs.steadyStateCPA}
+          onChange={onChange}
+        />
+        <NumberField
+          fieldKey="monthsToSteadyState"
+          label="Months to reach steady-state"
+          unit="months"
+          scale={1} precision={0} step={3} min={6} max={60}
+          value={inputs.monthsToSteadyState}
+          onChange={onChange}
+        />
+
+      </div>
+    </div>
+  );
+}
+
+// ── Remaining sections (Deposits, Loans, Servicing, Retention) ───────────────
+
+const SECTIONS = [
+  {
+    id: "deposits",
+    label: "Deposits",
+    fields: [
+      { key: "avgDepositBalance",  label: "Avg deposit balance",                  unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "rateBump",           label: "Rate bump — digital deposits",          unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 300    },
+      { key: "ratePremiumDecay",   label: "Rate premium decay",                    unit: "bps / yr",       scale: 1,   precision: 0, step: 1,    min: 0,     max: 50     },
+      { key: "depositCannibRateA", label: "Deposit cannibalization — Scenario A",  unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
+      { key: "depositCannibRateB", label: "Deposit cannibalization — Scenario B",  unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+    ],
+  },
+  {
+    id: "loans",
+    label: "Loans",
+    fields: [
+      { key: "loanPenetrationRate", label: "Loan penetration rate",               unit: "% of members",   scale: 100, precision: 0, step: 1,    min: 0,     max: 100    },
+      { key: "avgLoanBalance",      label: "Avg loan balance",                    unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "rateCut",             label: "Rate cut — digital loans",             unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
+      { key: "loanCannibRateA",     label: "Loan cannibalization — Scenario A",    unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
+      { key: "loanCannibRateB",     label: "Loan cannibalization — Scenario B",    unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+    ],
+  },
+  {
+    id: "servicing",
+    label: "Servicing Cost",
+    fields: [
+      { key: "maintenanceTrad",                label: "Account maintenance — traditional",   unit: "$ / member / yr", scale: 1,   precision: 0,  step: 10,   min: 0,  max: 1000  },
+      { key: "maintenanceDigital",             label: "Account maintenance — digital",       unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 500   },
+      { key: "transactionCostTrad",            label: "Transaction cost — teller",           unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.25, min: 0,  max: 20    },
+      { key: "transactionCostDigital",         label: "Transaction cost — digital",          unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.01, min: 0,  max: 5     },
+      { key: "avgTellerTransactionsPerMonth",  label: "Avg teller transactions / month",    unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10    },
+      { key: "avgDigitalTransactionsPerMonth", label: "Avg digital transactions / month",   unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
+      { key: "platformCost",                   label: "Digital platform infrastructure",     unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200   },
+      { key: "fraudCost",                      label: "Digital fraud & ID verification",     unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
+      { key: "costPerBranchVisit",             label: "Cost per branch visit",               unit: "$ / visit",       scale: 1,   precision: 2,  step: 0.5,  min: 0,  max: 50    },
+      { key: "freeVisits",                     label: "Free branch visits / yr",             unit: "visits / yr",     scale: 1,   precision: 0,  step: 1,    min: 0,  max: 12    },
+    ],
+  },
+  {
+    id: "retention",
+    label: "Retention",
+    fields: [
+      { key: "digitalAttritionYear1",       label: "Digital attrition — year 1",         unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+      { key: "digitalAttritionSteadyState", label: "Digital attrition — steady state",   unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+    ],
+  },
+];
 
 function SectionBlock({ section, inputs, onChange }) {
   return (
@@ -133,11 +311,22 @@ function SectionBlock({ section, inputs, onChange }) {
   );
 }
 
-export default function AdvancedSettings({ inputs, onChange }) {
+// ── Top-level component ───────────────────────────────────────────────────────
+
+export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
   const [open, setOpen] = useState(false);
 
   function handleReset() {
-    // Replace all overrides with DEFAULT_INPUTS values by emitting each key
+    // Reset acquisition fields individually
+    const acquisitionKeys = [
+      "marketName", "tam", "samPct",
+      "m12Target", "m36Target", "m60Target",
+      "initialCPA", "steadyStateCPA", "monthsToSteadyState",
+    ];
+    for (const key of acquisitionKeys) {
+      onChange(key, DEFAULT_INPUTS[key]);
+    }
+    // Reset all remaining section fields
     for (const section of SECTIONS) {
       for (const f of section.fields) {
         onChange(f.key, DEFAULT_INPUTS[f.key]);
@@ -175,6 +364,12 @@ export default function AdvancedSettings({ inputs, onChange }) {
 
       {open && (
         <div className="mt-2 space-y-4">
+          <AcquisitionSection
+            inputs={inputs}
+            onChange={onChange}
+            onBatchChange={onBatchChange}
+          />
+
           {SECTIONS.map((section) => (
             <SectionBlock
               key={section.id}
