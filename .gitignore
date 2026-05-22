@@ -36,6 +36,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Claude Code local config (launch.json is committed; local settings and worktrees are not)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Stray data file at repo root — canonical copy lives in /public/
+/ncua_model_data.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

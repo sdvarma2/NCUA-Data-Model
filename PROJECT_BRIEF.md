@@ -1,0 +1,592 @@
+# Digital Banking Expansion Model — Project Brief
+
+---
+
+## Project Scope
+
+This project is divided into two phases:
+
+**Phase 1 (this brief):** Build the data model and interactive simulation — institution selection, animated scenario modeling, benchmarking against the hybrid cohort, and scenario outputs.
+
+**Phase 2 (separate brief):** Build out the product strategy layer — specific product line design, segment targeting, and feature differentiation. Product design details are intentionally excluded here as they will evolve through a separate design process.
+
+---
+
+## Purpose
+
+This is a portfolio project demonstrating strategic thinking in financial services product design, combined with data-driven modeling built on real NCUA regulatory data. The deliverable is a publicly accessible web application that allows users to watch an animated simulation of the economics of launching a "digital-only" product line at a credit union — playing out month by month over a 60-month (5-year) horizon.
+
+The intended audience is financial services professionals and potential employers, published via LinkedIn. Usage will be low-volume. The app must be polished, captivating, and reflect product and analytical depth. The primary design goal is that even a busy executive who spends 90 seconds with it walks away having learned something and wanting to try a different variable.
+
+---
+
+## Product Strategy Context
+
+### The Core Concept
+
+A hypothetical regional credit union wants to expand its market share, potentially outside its current geographic branch footprint. The strategy creates two parallel product categories:
+
+**Digital category** — Members bank entirely digitally: mobile deposit, digital statements, app-based service. ATM access is not considered a branch service and is available to all members. In exchange for a digital-first experience, Digital members receive:
+- Higher rates on deposit products
+- Lower rates on loan products
+- Enhanced digital features
+- Up to 4 free branch visits per year (bridge for occasional in-person needs or geographic transitions)
+
+**Universal category** — Members have unlimited access to branches and all in-person services, plus full digital access. Standard rates apply.
+
+### Geographic Deployment Model (User-Selectable)
+
+The model supports two deployment scenarios presented as a prominent choice before the simulation runs — two large clickable cards, not a buried setting:
+
+**Scenario A — Expansion Markets Only**
+Digital products offered exclusively outside the current branch footprint. Cannibalization is slow-building: only affects members who relocate or discover the product through marketing spillover. Lower early risk, slower path to scale.
+
+**Scenario B — All Markets**
+Digital products offered everywhere, including existing branch markets. Cannibalization is immediate and front-loaded — rate-sensitive existing members migrate from day one. Higher early margin pressure, but directly competes to retain members who would otherwise leave for national digital banks.
+
+**The cannibalization difference between these two scenarios is one of the most important things the simulation communicates.** It should be viscerally visible in the animation — see Visualization section.
+
+### The 4 Branch Visits Bridge
+
+Digital members receive up to 4 free branch visits per year. Model as:
+```
+branch_visit_subsidy = min(avg_actual_visits, 4) × cost_per_branch_visit
+```
+Default `cost_per_branch_visit`: $5. User-adjustable.
+
+---
+
+## Data Architecture
+
+### Source
+
+NCUA 5300 Call Report, Q4 2025 (December 31, 2025). Publicly available quarterly regulatory filing for all federally insured credit unions.
+
+### Data File
+
+**Filename:** `ncua_model_data.json`
+**Size:** ~620KB
+**Location:** `/public/ncua_model_data.json` — ships with the app, consumed client-side, no backend needed.
+
+### File Structure
+
+```json
+{
+  "metadata": { ... },
+  "hybrid_benchmark": { ... },
+  "target_summary": { ... },
+  "institutions": [ ... ]
+}
+```
+
+#### `metadata`
+```json
+{
+  "source": "NCUA 5300 Call Report Q4 2025",
+  "generated": "2025-12-31",
+  "total_institutions": 462,
+  "target_count": 441,
+  "benchmark_count": 17,
+  "excluded_count": 4,
+  "digital_intensity_thresholds": {
+    "very_digital": "100K+ members/branch",
+    "digital_leaning": "50K-100K members/branch",
+    "hybrid": "20K-50K members/branch (benchmark cohort)",
+    "branch_balanced": "10K-20K members/branch",
+    "branch_heavy": "under 10K members/branch"
+  }
+}
+```
+
+#### `hybrid_benchmark`
+17-institution reference cohort representing credit unions that have achieved a hybrid digital/branch model. Named institutions include Digital FCU, Connexus, Police & Fire, Pennsylvania State Employees, Municipal CU, General Electric CU, and others.
+
+```json
+{
+  "label": "Hybrid benchmark cohort (20K–50K members/branch)",
+  "count": 17,
+  "institutions": ["DIGITAL FCU", "CONNEXUS", "POLICE & FIRE", ...],
+  "metrics": {
+    "opex_per_member":      { "p25": 317,   "median": 430,   "p75": 582   },
+    "occupancy_per_member": { "p25": 12,    "median": 17,    "p75": 20    },
+    "nim_pct":              { "p25": 2.2,   "median": 2.7,   "p75": 3.8   },
+    "roa_pct":              { "p25": 0.3,   "median": 0.6,   "p75": 0.8   },
+    "dividend_rate_pct":    { "p25": 1.0,   "median": 1.8,   "p75": 2.4   },
+    "members_per_branch":   { "p25": 24153, "median": 26911, "p75": 32303 },
+    "members_per_fte":      { "p25": 461,   "median": 578,   "p75": 699   }
+  }
+}
+```
+
+#### `target_summary`
+Same distributions across all 441 target institutions (branch-balanced + branch-heavy). Represents today's market baseline.
+
+#### `institutions` array
+458 records (441 target + 17 hybrid), 42 fields each.
+
+**Identity fields:** `CU_NUMBER`, `CU_NAME` (title-case for display), `STATE`, `CITY`, `assets_b`, `members`, `branch_count`, `ft_employees`, `pt_employees`, `fte_equiv`
+
+**Per-member operating costs ($/member/yr):** `opex_per_member`, `comp_per_member`, `occupancy_per_member`, `office_ops_per_member`, `loan_svc_per_member`, `professional_per_member`, `marketing_per_member`
+
+**Revenue & profitability:** `interest_yield_pct`, `dividend_rate_pct`, `fee_income_pct`, `nonint_income_pct`, `nim_pct`, `roa_pct`, `net_worth_ratio` ⚠️ divide by 100 for display
+
+**Efficiency:** `members_per_fte`, `members_per_branch`
+
+**Raw totals:** `total_opex`, `total_occupancy`, `total_comp`, `total_net_income`
+
+**Segmentation & gap analysis:** `digital_intensity`, `member_gap_to_hybrid`, `branch_surplus_vs_hybrid`, `opex_gap_vs_hybrid_median`, `occupancy_gap_vs_hybrid_median`
+
+**Hybrid benchmarks (embedded on every row):** `hybrid_opex_p50`, `hybrid_opex_p25`, `hybrid_opex_p75`, `hybrid_occupancy_p50`, `hybrid_nim_p50`, `hybrid_roa_p50`, `hybrid_div_rate_p50`
+
+### Known Data Quirks
+- `net_worth_ratio` divide by 100 for display (raw ~1000–1200 = 10–12%)
+- SELF-HELP (NC): net worth ratio ~2606 — legitimate CDFI outlier
+- GREATER NEVADA: net worth ratio ~456 — possible filing anomaly
+- Institution names are all-caps as filed; title-case for display
+
+---
+
+## Model Variables
+
+### Scenario Control
+
+| Variable | Type | Default | Notes |
+|----------|------|---------|-------|
+| Geographic deployment | Toggle | Expansion only | Large card selection before simulation |
+| Free branch visits / yr (digital) | Number | 4 | |
+| Cost per branch visit | $ | $5 | |
+
+### Strategy Levers (Primary UI — four segmented controls)
+
+The primary interface exposes four high-level levers. Each maps to underlying variables. Non-technical users interact only with these. Full variable access is available in Advanced Settings.
+
+| Lever | Positions | Controls |
+|-------|-----------|---------|
+| **Acquisition aggression** | Conservative / Moderate / Aggressive | Launch CPA, monthly member target, launch duration, steady-state CPA |
+| **Rate competitiveness** | Conservative / Moderate / Aggressive | Deposit rate bump, loan rate cut, rate decay |
+| **Target member profile** | Mass market / Balanced / Upmarket | Avg deposit balance, loan penetration, avg loan balance |
+| **Market opportunity** | Single metro / Multi-metro / Multi-state | Addressable market size, difficulty multiplier |
+
+### Market Opportunity Presets
+
+| Profile | Addressable market | Difficulty multiplier | Description |
+|---------|-------------------|----------------------|-------------|
+| Single metro | 150,000 | 1.2 | One major city, moderate competition |
+| Multi-metro regional | 500,000 | 1.0 | Several mid-size cities, typical competition |
+| Multi-state | 1,500,000 | 0.9 | Broad geography, lower average density, less saturation |
+
+### Advanced Settings Variables (full detail)
+
+These are all exposed in the Advanced Settings panel with default values, source citations, and help text. The panel groups inputs into five sections. For each input, the UI displays the current numeric value, the source/evidence, and a brief explanation of what changing it does to the model output.
+
+#### Acquisition
+| Variable | Unit | Default | Evidence | Help text |
+|----------|------|---------|----------|-----------|
+| Launch CPA | $ / member | $400 | Cornerstone Advisors annual banking survey: existing-market CU CAC $200–400; expansion markets (no brand presence) at or above top of range. National digital brands (Ally, Marcus) disclosed $300–450 early-market CAC. | Cost to acquire each new digital member during the launch window. Higher in expansion markets because the CU has no name recognition. |
+| Launch duration | months | 12 | Reflects typical elevated-spend window for a new product launch. | How many months the launch CPA applies before dropping to steady-state CPA. |
+| Steady-state CPA | $ / member | $75 | Reflects organic/referral acquisition post-launch. | Cost per member after launch phase ends — lower due to word-of-mouth and established brand. |
+| Monthly new member target | members/month | 500 | Calibrated so a 5-year run reaches meaningful scale without instantly saturating addressable market. | Maximum new members per month. Actual may be lower if market saturation is approached. |
+| Addressable market size | households | 500,000 | Multi-metro default; see Market Opportunity presets. | Total pool of potential members. Growth slows as cumulative acquired approaches this ceiling. |
+| Market difficulty multiplier | 0.5× – 2.0× | 1.0× | Normalized to 1.0 for multi-metro; single metro is harder (1.2×), multi-state is easier (0.9×) due to less geographic saturation. | Scales the effective CPA up or down. A 1.2× multiplier means $400 launch CPA becomes $480. |
+
+#### Deposits
+| Variable | Unit | Default | Evidence | Help text |
+|----------|------|---------|----------|-----------|
+| Avg deposit balance — digital | $ | $18,000 | FDIC consumer survey / Fed Survey of Consumer Finances: median checking + savings balance for primary banking households ~$15–22K. Upmarket skews to $35K; mass market to $8K. | Average combined deposit balance per digital member. This is the balance that earns NII for the institution and determines the cost of the rate premium. |
+| Rate bump — digital deposits | bps | 50 | Competitive analysis: digital-first CUs (Digital FCU, Connexus) and neobanks (SoFi, Ally) typically offer 40–80 bps above local branch rates on savings/money market. | How many basis points above the standard rate digital members earn on deposits. This is the primary lever for attracting rate-sensitive members but costs the institution money. |
+| Rate premium decay | bps / year | 10 | As competitors respond, the institution's rate advantage narrows. 10 bps/year is gradual — assumes a 5-year window before parity. | How quickly the rate premium erodes annually. At 10 bps/year, a 50 bps advantage becomes 0 bps at year 5. |
+| Deposit cannibalization rate — Scenario A | % of existing deposits / yr | 0.5% | No clean public benchmarks; directionally conservative — only affects members who relocate or encounter the product through marketing spillover. | In Expansion-only scenario, the fraction of the institution's existing deposit book that migrates to digital rates each year. Applied as a fixed annual drag. |
+| Deposit cannibalization rate — Scenario B | % of existing deposits / yr | 5.0% | 10× Scenario A; represents rate-sensitive existing members migrating immediately when offered digital rates in their own market. Most assumption-dependent figure in the model. | In All-Markets scenario, the fraction of existing deposits that reprices upward from day one. The dominant driver of early negative cash flow in Scenario B. |
+
+#### Loans
+| Variable | Unit | Default | Evidence | Help text |
+|----------|------|---------|----------|-----------|
+| Loan penetration rate | % of digital members | 40% | Typical CU member loan participation rate is 30–50%. Digital-only members are somewhat self-selected for financial engagement. | Fraction of digital members who carry a loan with the institution. |
+| Avg loan balance — digital borrowers | $ | $22,000 | Consistent with NCUA average auto loan + personal loan mix. | Average outstanding loan balance per borrowing digital member. |
+| Rate cut — digital loans | bps | 25 | Digital CUs typically offer 20–40 bps below standard personal loan/auto rates as a digital-first member benefit. | How many basis points below standard rates digital members pay on loans. This costs the institution net interest income. |
+| Loan cannibalization rate — Scenario A | % of existing loans / yr | 0.3% | Proportional to deposit cannibalization but lower — loan repricing requires active refinancing, which is slower than deposit migration. | In Expansion-only, fraction of existing loan book that reprices downward each year. |
+| Loan cannibalization rate — Scenario B | % of existing loans / yr | 3.0% | 10× Scenario A. Existing members with loans who migrate to digital accounts will seek to reprice. | In All-Markets, fraction of existing loans that reprices downward from day one. |
+
+#### Servicing Cost
+
+The key derived output from this section is **effective servicing savings per digital member per year**, which should land in the $90–150 range. The NCUA-observed opex gap between hybrid and branch-heavy institutions is $148/member/year — this is the empirical ceiling.
+
+```
+savings_per_member_yr =
+  (maintenanceTrad + tellerTxns×transactionCostTrad + digitalTxns×transactionCostDigital)
+  − (maintenanceDigital + digitalTxns×transactionCostDigital + platformCost + fraudCost + branchVisitSubsidy)
+
+= maintenanceTrad − maintenanceDigital
+  + tellerTxns×transactionCostTrad
+  − platformCost − fraudCost − branchVisitSubsidy
+```
+
+At defaults: 250 − 95 + (4 × $4.50) − 35 − 15 − 20 = **$103/yr** per member. This is the "savings engine" of the digital product.
+
+| Variable | Unit | Default | Evidence | Help text |
+|----------|------|---------|----------|-----------|
+| Account maintenance — traditional | $ / member / yr | $250 | Fully-loaded: direct account ops ~$70 + allocated branch staff time ~$100 + customer service overhead ~$80. ABA/Filene published fully-loaded member cost: $200–340/yr. | The fully-loaded annual cost to serve a traditional member. Increasing this widens the savings opportunity from digital conversion. |
+| Account maintenance — digital | $ / member / yr | $95 | Neobank operational benchmarks: digital account ops, compliance, basic self-serve customer service. | The fully-loaded annual cost to serve a digital-only member. |
+| Transaction cost — traditional (teller) | $ / transaction | $4.50 | ABA Cost Study / Celent: branch/teller transactions $4–6 each. | Cost to the institution per teller transaction. |
+| Transaction cost — digital | $ / transaction | $0.20 | Published range $0.08–0.25 across ACH, bill pay, mobile, debit. | Cost per digital transaction — applies equally to traditional and digital members since both use digital channels. |
+| Avg teller transactions / member / month | count | 0.33 (~4/yr) | Fed "How America Banks" (2021): average consumer visits a branch ~3–5 times per year. 1/3 per month = 4/yr. For a member *choosing* a digital product, actual usage is likely lower — this is institution-friendly. | Monthly teller visits per traditional member. This is the cost that disappears when a member goes digital. |
+| Avg digital transactions / member / month | count | 18 | Total digital transaction volume (ACH, bill pay, mobile, debit). Consistent with consumer banking frequency data. Note: this cost is the same for both member types — it does NOT create savings by going digital. | Monthly digital transaction volume per member. At $0.20 each, this costs $43.20/yr and applies to both member types equally. |
+| Digital platform infrastructure | $ / member / yr | $35 | Core banking platform + mobile app + API layer per digital member. | Per-member annual cost of the digital infrastructure — a new cost for digital-only members with no branch offset. |
+| Digital fraud & ID verification | $ / member / yr | $15 | Digital-only members require more robust identity verification and fraud monitoring (no in-person ID checks). | Per-member annual cost of digital identity and fraud systems. |
+| Cost per branch visit | $ / visit | $5 | Marginal cost of serving a digital member who uses their annual branch visit allowance. | Cost each time a digital member uses one of their 4 free annual branch visits. |
+| Free branch visits / yr | count | 4 | Defined by the product strategy. | How many free branch visits per year digital members receive. Subsidy = min(actual visits, this number) × cost per visit. |
+
+#### Retention
+| Variable | Unit | Default | Evidence | Help text |
+|----------|------|---------|----------|-----------|
+| Traditional member annual attrition | % / yr | 6% | Typical CU member attrition is 4–8%/yr; 6% is mid-range. | Annual attrition for the institution's existing traditional member base. |
+| Digital member year-1 attrition | % in yr 1 | 18% | SoFi, Chime, and other neobanks have referenced 15–25% first-year attrition for digital-only accounts in public disclosures. Early members churn before forming habits. | Higher first-year attrition for digital members reflects the acquisition funnel including some shoppers who don't stay. |
+| Digital member steady-state attrition | % / yr after yr 1 | 7% | Slightly above traditional CU attrition (~4–6%). Digital-only accounts have less stickiness than primary banking relationships. | Annual attrition for digital members who survive year 1. |
+
+### Input Interplay — Key Derived Values
+
+Before the animation, the Advanced Settings panel should display these "live" derived values so the user can see the model's intermediate math at a glance. They update instantly when any input changes.
+
+| Derived value | Formula | Healthy range |
+|---------------|---------|---------------|
+| Effective savings/member/yr | See servicing cost formula above | $90–150 (anchored to NCUA $148 gap) |
+| Effective NII rate (proxy) | `hybrid_nim_p50` from selected institution | Displayed, not adjustable |
+| Monthly NII per 1,000 digital members | `1000 × avgDepositBalance × hybrid_nim_p50/100 / 12` | Depends on institution |
+| Monthly rate premium per 1,000 digital members | `1000 × (avgDepositBalance × rateBump/10000 + avgLoanBalance × penetrationRate × rateCut/10000) / 12` | Should be well below monthly NII |
+| NII coverage ratio | Monthly NII ÷ Monthly rate premium cost (at 1,000 members) | Should exceed 3× for margin safety |
+| Annual cannibalization drag — Scenario B | `assets_b × 1e9 × (0.85 × depositCannibRateB × rateBump/10000 + 0.65 × loanCannibRateB × rateCut/10000)` | Depends heavily on institution size |
+
+### Institutional Context (pre-populated on institution selection)
+`members`, `branch_count`, `opex_per_member`, `occupancy_per_member`, `nim_pct`, `digital_intensity`, `opex_gap_vs_hybrid_median`, `branch_surplus_vs_hybrid`
+
+---
+
+## Calculation Engine (`src/lib/model.js`)
+
+**All logic lives in pure functions that return a 60-element array** — one object per month. The UI simply plays through this array. This keeps calculation logic completely independent of animation logic.
+
+### Month object shape
+```javascript
+{
+  month: 1,                        // 1–60
+  newMembersAcquired: 487,
+  totalDigitalMembers: 487,
+  cumulativeAcquisitionSpend: 73050,
+  monthlyRatePremiumCost: 14230,
+  monthlyCannibalizationCost: 8940, // deposit + loan combined
+  depositCannibalizationCost: 5820, // shown separately in visualization
+  loanCannibalizationCost: 3120,    // shown separately in visualization
+  monthlyServicingCostSavings: 6180,
+  monthlyGrossNII: 19928,          // net interest income earned on digital members
+  monthlyNetContribution: -89040,
+  cumulativeNetContribution: -89040,
+  cumulativeCannibalDrag: 8940,     // running total of cannibalization cost
+  marketPenetrationPct: 0.097,
+  isBreakEvenMonth: false
+}
+```
+
+### Key functions
+
+**`runSimulation(institution, inputs, scenario)`**
+Returns the full 60-month array. Called once when user hits Play. Both scenarios computed simultaneously so switching scenarios replays instantly without recalculation.
+
+**`computeMonthlyAcquisition(month, inputs)`**
+```
+cpa = month <= launchDuration ? launchCPA : steadyStateCPA
+cpa *= difficultyMultiplier
+newMembers = min(monthlyTarget, remainingAddressableMarket)
+acquisitionSpend = newMembers × cpa
+```
+
+**`computeCannibalCost(month, institution, inputs, scenario)`**
+```
+// Scenario A: slow ramp, only relocating members
+// Scenario B: immediate, applied to full existing member base from month 1
+depositDrag = existingShares × cannibRateDeposit × (rateBump / 10000) / 12
+loanDrag    = existingLoans  × cannibRateLoan   × (rateCut  / 10000) / 12
+return { depositCannibalizationCost: depositDrag, loanCannibalizationCost: loanDrag }
+```
+
+**`computeServicingDelta(totalDigitalMembers, inputs)`**
+```
+// Traditional member incurs both teller and digital transaction costs
+traditionalCost = maintenance_trad
+                  + (avgTellerTransactionsPerMonth × 12 × transactionCostTrad)
+                  + (avgDigitalTransactionsPerMonth × 12 × transactionCostDigital)
+// Digital member eliminates teller transactions; gains platform/fraud/subsidy costs
+digitalCost     = maintenance_digital
+                  + (avgDigitalTransactionsPerMonth × 12 × transactionCostDigital)
+                  + platformCost + fraudCost + branchVisitSubsidy
+savingsPerMember = traditionalCost - digitalCost   // ~$103/yr; anchored to NCUA $148 gap
+totalSavings     = totalDigitalMembers × savingsPerMember / 12  // returns monthly figure
+```
+
+**`computeRatePremiumCost(totalDigitalMembers, inputs, month)`**
+```
+effectiveBump = max(0, rateBump - (month × decayPerMonth))
+depositIncome = avgDepositBalance × effectiveBump/10000 / 12
+loanCost      = avgLoanBalance × penetrationRate × rateCut/10000 / 12
+return (depositIncome + loanCost) × totalDigitalMembers
+```
+
+**`computeNIIContribution(totalDigitalMembers, inputs, institution)`**
+```
+// Proxy: hybrid_nim_p50 from institution record — median NIM of the hybrid cohort,
+// reflecting earnings on a digitally-oriented member base. Superior to institution.nim_pct,
+// which reflects traditional member economics.
+// ratePremiumCost already deducts the incremental rate premium above this base, so no double-count.
+monthlyGrossNII = totalDigitalMembers × avgDepositBalance × (institution.hybrid_nim_p50 / 100) / 12
+```
+
+**`findBreakEven(monthlyArray)`**
+Returns the first month where `cumulativeNetContribution >= 0`, or null if not reached within 60 months.
+
+---
+
+## Visualization
+
+### Design Philosophy
+The app is a **simulation that runs**, not a dashboard that displays. The primary interaction is: choose a scenario → adjust levers → hit Play → watch 36 months unfold. The goal is that an executive who spends 90 seconds with it walks away having learned something and wanting to change a variable.
+
+### Layout
+
+**Top section — Institution selector + scenario choice**
+- Search/select institution (pre-populates institutional context)
+- Two large cards: "Expansion Markets Only" vs "All Markets incl. Existing Branches"
+- Brief plain-English description of what each means
+
+**Middle section — Strategy levers**
+Four segmented controls (Conservative / Moderate / Aggressive) with the market opportunity selector
+"Advanced Settings" disclosure for full variable access
+
+**Main stage — The simulation**
+Full-width animated display. Play / Pause / Reset controls. Speed selector (1× / 2× / 4×).
+
+**Bottom section — Post-simulation summary cards**
+
+### The Main Stage Animation
+
+**Hero element: Cumulative P&L curve**
+A line that starts negative and curves upward. A traveling dot moves along it as the simulation plays. The moment the line crosses zero: the line turns green, a subtle pulse animation fires, a "Break-even reached — Month X" label appears. This is the moment the simulation is building toward.
+
+**Cannibalization shadow**
+A shaded area (muted red/amber) fills the space between the actual P&L curve and a ghosted "without cannibalization" line. This makes the cannibalization drag visible as a shape, not just a number. The shadow is noticeably wider and appears earlier in Scenario B (All Markets) than Scenario A (Expansion Only). When the user switches scenarios and replays, the difference in shadow behavior communicates the strategic tradeoff without words.
+
+**Live counters (updating as simulation plays)**
+
+| Counter | Color | Notes |
+|---------|-------|-------|
+| Digital members acquired | Neutral | Counting up |
+| Cumulative acquisition spend | Red | Counting up |
+| Cannibalization drag to date | Amber | Counting up; broken into deposit vs loan on hover |
+| Cumulative net contribution | Red → Green | Turns green at break-even |
+| Month / Year marker | Neutral | Scrubbing through time |
+
+**Member cohort waterfall (secondary visualization)**
+A stacked bar chart that builds month by month alongside the P&L curve. Three layers:
+- New members acquired this month (bright)
+- Members retained from prior months (mid)
+- Members lost to attrition (shown as a downward notch)
+
+This makes the compounding retention dynamic visible — early cohorts that survive become the stable foundation. It's the visual a financial services executive will recognize from their own board presentations.
+
+**Market penetration indicator**
+A simple arc or progress fill showing % of addressable market reached. Caps the growth story visually — the simulation slows as market saturation approaches.
+
+### Post-Simulation Summary Cards
+After the simulation completes (or is paused), four summary cards appear below the stage:
+
+1. **Break-even** — Month X of 60 (or "Not reached within 5 years")
+2. **10-year NPV per member** — $X,XXX net of acquisition and rate premium
+3. **Cannibalization cost** — $X.XM total drag, split deposit vs loan
+4. **OpEx savings potential** — $X.XM annually if hybrid benchmark density reached
+
+### Scenario Comparison
+After running a simulation, a "Compare Scenarios" button runs the other scenario and shows both P&L curves on the same chart simultaneously — one solid, one dashed. The gap between them across the 36 months is the total cost of the bolder strategy, visible as an area. Break-even points are marked on both lines.
+
+---
+
+## Technical Stack
+
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Frontend | Next.js (React) | Component-based, Vercel-native |
+| Styling | Tailwind CSS | Utility-first, fast iteration |
+| Hosting | Vercel | Free tier, deploys from GitHub, permanent URL |
+| Data | Client-side JSON | `/public/ncua_model_data.json` — no backend |
+| Charts | Recharts | Clean React integration, supports animation |
+| Animation | React state + requestAnimationFrame | Play through month array at controlled speed |
+| State | React useState / useReducer | All in memory, no persistence needed |
+
+### Repository Structure
+```
+/
+├── public/
+│   └── ncua_model_data.json
+├── src/
+│   ├── components/
+│   │   ├── InstitutionSelector.jsx
+│   │   ├── ScenarioCards.jsx          ← large card scenario toggle
+│   │   ├── StrategyLevers.jsx         ← four primary sliders
+│   │   ├── AdvancedSettings.jsx       ← full variable access, collapsed by default
+│   │   ├── SimulationStage.jsx        ← main animated display
+│   │   ├── PLCurve.jsx                ← hero chart with shadow
+│   │   ├── CohortWaterfall.jsx        ← member cohort chart
+│   │   ├── LiveCounters.jsx           ← animated counter display
+│   │   ├── SummaryCards.jsx           ← post-simulation summary
+│   │   └── ScenarioComparison.jsx     ← dual-scenario overlay
+│   ├── lib/
+│   │   └── model.js                   ← ALL calculation logic, pure functions
+│   └── app/
+│       └── page.jsx
+├── PROJECT_BRIEF.md
+└── README.md
+```
+
+---
+
+## Build Order
+
+### Phase 1 — Completed (Steps 1–8)
+
+1. ✅ **Data foundation** — Load JSON, render institution count. Smoke test.
+2. ✅ **Institution selector** — Search, filter, select. Log selected record to console.
+3. ✅ **Institution profile card** — Display key metrics with hybrid benchmark alongside each.
+4. ✅ **Benchmark comparison panel** — Selected institution vs hybrid p25/median/p75.
+5. ✅ **Calculation engine** — Write and test all `model.js` functions. Verify 60-month array.
+6. ✅ **Scenario toggle + lever UI** — Two deployment scenario cards, four strategy levers.
+7. ✅ **Levers → inputs wiring** — Lever selections resolve to model inputs via `levers.js`, recalculate month array.
+8. ✅ **Static simulation preview** — Month-60 final values displayed (members, cumulative net, break-even month).
+
+---
+
+### Phase 2 — Model Transparency & Input Calibration (Steps 9–13)
+
+The outputs from Phase 1 are hard to trust or interpret without seeing the inputs that produced them. This phase builds full input visibility before the animation is layered on top. **Do not proceed to Phase 3 until these steps are complete and the model outputs pass the sanity checks in Step 13.**
+
+**9. Advanced Settings panel — full input exposure**
+
+Build `AdvancedSettings.jsx` as an expandable section below the strategy levers. When expanded, it shows every `DEFAULT_INPUTS` value as an editable numeric field, grouped into five sections: Acquisition, Deposits, Loans, Servicing Cost, and Retention.
+
+- When a strategy lever is set (e.g., Acquisition Aggression = Aggressive), the inputs that lever controls should be **visually marked** in Advanced Settings (e.g., a subtle colored border or label like "Set by lever") showing the lever's current value. If the user edits that field directly, the field switches to "Custom" mode and the lever no longer controls it.
+- Cannibalization inputs show both the Scenario A and Scenario B values side by side, since both are always visible.
+- All fields accept numeric input; enforce reasonable min/max bounds without hard errors.
+- Inputs wire back into `resolveInputs()` — the simulation recalculates live as the user types.
+
+**10. Derived values display — "live math" panel**
+
+Inside Advanced Settings (or immediately below the lever section), add a small "Model Health" panel showing the six derived values from the Input Interplay table above, computed from the current inputs:
+
+- Effective servicing savings / member / yr (target: $90–150)
+- Rate premium cost / member / yr (should be substantially less than NII)
+- Monthly NII per 1,000 digital members
+- Monthly rate premium cost per 1,000 digital members
+- NII coverage ratio (NII ÷ rate premium; target: > 3×)
+- Annual cannibalization drag — Scenario B (shown in $ and as % of institution's current NII)
+
+These are the "instrument panel" — they let the user see whether their inputs produce a plausible model before running the simulation. Color-code them: green if in expected range, amber if borderline, red if implausible.
+
+**11. Tabular simulation detail**
+
+Replace the current "simulation preview" section with a compact table showing key fields at months 1, 6, 12, 24, 36, and 60:
+
+| Month | Digital Members | Cumul. Acq. Spend | Monthly NII | Monthly Rate Premium | Monthly Cannibal. | Monthly Servicing Savings | Monthly Net | Cumul. Net |
+|-------|----------------|-------------------|-------------|---------------------|-------------------|--------------------------|-------------|------------|
+
+This is the primary debugging surface — it lets you trace the monthly math and spot if any component is implausibly large or small. Both scenarios (A and B) shown in separate rows or via a toggle.
+
+**12. Evidence tooltips on every Advanced Settings input**
+
+Add a `(?)` icon next to each input label. On hover/click, show a tooltip with:
+- The source citation (from the evidence column in the Advanced Settings Variables table above)
+- The calibration anchor (e.g., "At these defaults, effective savings = $103/yr/member, anchored to NCUA-observed $148 gap")
+- What direction moving this input changes the output
+
+This is what makes the model credible to a financial services audience — every number has a footnote.
+
+**13. Calibration checkpoint — sanity checks before animation**
+
+Before proceeding, verify:
+
+| Check | What to look for |
+|-------|-----------------|
+| Servicing savings / member | Should be $90–150 at defaults |
+| NII coverage ratio | Monthly NII should be > 3× monthly rate premium cost at 1,000 members |
+| Break-even month (default inputs, mid-size institution, Scenario A) | Should be roughly month 18–36. Shorter or longer is a flag. |
+| Break-even month (Scenario B) | Should be later than Scenario A by at least 6–12 months |
+| Month-60 cumulative net (Scenario B) | Should be positive but materially lower than Scenario A |
+| Cannibalization drag profile | Should be constant monthly, not zero — verify it's appearing in the table |
+| Attrition effect | Month-60 digital members should be noticeably less than cumulative acquired (attrition working) |
+
+If any check fails, fix the model or inputs before proceeding.
+
+---
+
+### Phase 3 — Animation & Visualization (Steps 14–21)
+
+These steps build on a model whose inputs and outputs you trust.
+
+**14. Play animation engine**
+- Add play / pause / reset controls and a speed selector (1× / 2× / 4×)
+- Use `requestAnimationFrame` to step through the 60-month array at controlled speed
+- Expose `currentMonth` as state; all visualizations read from `simulation[currentMonth - 1]`
+- Both scenarios are already pre-computed; switching scenario replays instantly
+
+**15. Live counters**
+Animated number displays that update as `currentMonth` advances:
+- Digital members (counting up)
+- Cumulative acquisition spend (counting up, red)
+- Cannibalization drag to date (counting up, amber; deposit vs loan breakdown on hover)
+- Cumulative net contribution (red → green transition at break-even)
+- Month / Year label
+
+**16. P&L curve with break-even moment**
+- Recharts `LineChart` that draws progressively as the simulation plays (data filtered to `slice(0, currentMonth)`)
+- Y-axis spans the full range from min to max cumulative net
+- When `isBreakEvenMonth` fires: line color transitions to green, a subtle radial pulse animation, "Break-even — Month X" label appears and stays
+
+**17. Cannibalization shadow**
+- Second line on the P&L chart: "without cannibalization" (cumulative net + cumulativeCannibalDrag)
+- Fill the area between the two lines with a muted amber/red with low opacity
+- Shadow is visibly wider and appears immediately in Scenario B vs. Scenario A — this is the key visual the brief is built around
+
+**18. Cohort waterfall**
+- Recharts `BarChart` (stacked) that builds alongside the P&L curve
+- Three layers per month: new members acquired (bright), retained from prior months (mid), attrition (downward notch or negative stack)
+- Advances month by month in sync with the P&L curve
+
+**19. Market penetration indicator**
+- Simple arc or radial progress showing `marketPenetrationPct`
+- Updates as simulation plays; visually communicates market saturation approaching
+
+**20. Post-simulation summary cards**
+After the simulation completes (or at any point after it's been run), four cards appear below the stage:
+1. Break-even — Month X of 60 (or "Not reached within 5 years")
+2. 5-year cumulative net contribution — $X.XM
+3. Cannibalization cost — $X.XM total drag, split deposit vs loan
+4. OpEx savings potential — $X.XM annually if hybrid benchmark density reached (from institution's `opex_gap_vs_hybrid_median`)
+
+**21. Scenario comparison**
+A "Compare Scenarios" button that runs the other scenario (already pre-computed) and shows both P&L curves on the same chart simultaneously — one solid, one dashed. The shaded gap area between them is the total cost of the bolder strategy. Break-even months marked on both lines.
+
+**22. Polish + deploy**
+- Responsive layout verification at 375px (iPhone SE) per CLAUDE.md requirements
+- Contrast audit against WCAG 2.1 AA per CLAUDE.md requirements
+- Tooltips on all chart elements
+- Edge cases: institution with very large assets (cannibalization dominates), institution already near hybrid density, market saturation within 5 years
+- Vercel deployment from GitHub
+
+---
+
+## What This Project Demonstrates
+
+1. **Strategic product thinking** — two-tier product strategy with segment analysis, gap identification, and risk assessment grounded in industry data
+2. **Regulatory data fluency** — sourcing, processing, and extracting insight from NCUA 5300 call report data
+3. **Financial modeling** — multi-variable customer economics model with real institutional benchmarks
+4. **Technical execution** — production-quality animated web application deployed publicly
+5. **Communication** — translating complex financial concepts into an experience accessible to non-technical stakeholders
+
+---
+
+*Data source: NCUA 5300 Call Report, Q4 2025. All figures reflect publicly available regulatory filings.*
