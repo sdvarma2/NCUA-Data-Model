@@ -162,7 +162,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
 
         <TextField
           fieldKey="marketName"
-          label="Market name / geography"
+          label="Market Name / Geography"
           value={inputs.marketName}
           onChange={onChange}
         />
@@ -197,7 +197,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
 
         <NumberField
           fieldKey="m12Target"
-          label="Target active members — Month 12"
+          label="Target Active Members — Month 12"
           unit="members"
           scale={1} precision={0} step={250} min={0} max={500000}
           value={inputs.m12Target}
@@ -205,7 +205,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
         />
         <NumberField
           fieldKey="m36Target"
-          label="Target active members — Month 36"
+          label="Target Active Members — Month 36"
           unit="members"
           scale={1} precision={0} step={500} min={0} max={500000}
           value={inputs.m36Target}
@@ -213,7 +213,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
         />
         <NumberField
           fieldKey="m60Target"
-          label="Target active members — Month 60"
+          label="Target Active Members — Month 60"
           unit="members"
           scale={1} precision={0} step={1000} min={0} max={500000}
           value={inputs.m60Target}
@@ -260,7 +260,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           tooltip={
             <>
               <p className="mb-2">
-                This is the cost to acquire an active member/household (with funded accounts and
+                This is the cost to acquire an active household (with funded accounts and
                 consistent usage). The cost to acquire an active member will be higher than the cost
                 of acquisition overall because, especially for digital users, a significant number
                 will join but not fund accounts.
@@ -299,7 +299,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
         />
         <NumberField
           fieldKey="monthsToSteadyState"
-          label="Months to reach steady-state"
+          label="Months to Reach Steady-State"
           unit="months"
           scale={1} precision={0} step={3} min={6} max={60}
           value={inputs.monthsToSteadyState}
@@ -318,46 +318,47 @@ const SECTIONS = [
     id: "deposits",
     label: "Deposits",
     fields: [
-      { key: "avgDepositBalance",  label: "Avg deposit balance",                  unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
-      { key: "rateBump",           label: "Rate bump — digital deposits",          unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 300    },
-      { key: "ratePremiumDecay",   label: "Rate premium decay",                    unit: "bps / yr",       scale: 1,   precision: 0, step: 1,    min: 0,     max: 50     },
-      { key: "depositCannibRateA", label: "Deposit cannibalization — Scenario A",  unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
-      { key: "depositCannibRateB", label: "Deposit cannibalization — Scenario B",  unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+      { key: "avgDepositBalance",  label: "Avg Deposit Balance",                              unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "rateBump",           label: "Initial Rate Bump",                                unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 300    },
+      { key: "ratePremiumDecay",   label: "Rate Bump Decay",                                  unit: "bps / yr",       scale: 1,   precision: 0, step: 1,    min: 0,     max: 50     },
+      { key: "rateBumpFloor",      label: "Rate Bump Floor",                                  unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
+      { key: "depositCannibRateA", label: "Deposit Cannibalization — Expansion Markets Only", unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
+      { key: "depositCannibRateB", label: "Deposit Cannibalization — All Markets",            unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
     ],
   },
   {
     id: "loans",
     label: "Loans",
     fields: [
-      { key: "loanPenetrationRate", label: "Loan penetration rate",               unit: "% of members",   scale: 100, precision: 0, step: 1,    min: 0,     max: 100    },
-      { key: "avgLoanBalance",      label: "Avg loan balance",                    unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
-      { key: "rateCut",             label: "Rate cut — digital loans",             unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
-      { key: "loanCannibRateA",     label: "Loan cannibalization — Scenario A",    unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
-      { key: "loanCannibRateB",     label: "Loan cannibalization — Scenario B",    unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+      { key: "loanPenetrationRate", label: "Loan Penetration Rate",                          unit: "% of members",   scale: 100, precision: 0, step: 1,    min: 0,     max: 100    },
+      { key: "avgLoanBalance",      label: "Avg Loan Balance",                               unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "rateCut",             label: "Rate Cut — Digital Loans",                        unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
+      { key: "loanCannibRateA",     label: "Loan Cannibalization — Expansion Markets Only",   unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
+      { key: "loanCannibRateB",     label: "Loan Cannibalization — All Markets",              unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
     ],
   },
   {
     id: "servicing",
     label: "Servicing Cost",
     fields: [
-      { key: "maintenanceTrad",                label: "Account maintenance — traditional",   unit: "$ / member / yr", scale: 1,   precision: 0,  step: 10,   min: 0,  max: 1000  },
-      { key: "maintenanceDigital",             label: "Account maintenance — digital",       unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 500   },
-      { key: "transactionCostTrad",            label: "Transaction cost — teller",           unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.25, min: 0,  max: 20    },
-      { key: "transactionCostDigital",         label: "Transaction cost — digital",          unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.01, min: 0,  max: 5     },
-      { key: "avgTellerTransactionsPerMonth",  label: "Avg teller transactions / month",    unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10    },
-      { key: "avgDigitalTransactionsPerMonth", label: "Avg digital transactions / month",   unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
-      { key: "platformCost",                   label: "Digital platform infrastructure",     unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200   },
-      { key: "fraudCost",                      label: "Digital fraud & ID verification",     unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
-      { key: "costPerBranchVisit",             label: "Cost per branch visit",               unit: "$ / visit",       scale: 1,   precision: 2,  step: 0.5,  min: 0,  max: 50    },
-      { key: "freeVisits",                     label: "Free branch visits / yr",             unit: "visits / yr",     scale: 1,   precision: 0,  step: 1,    min: 0,  max: 12    },
+      { key: "maintenanceTrad",                label: "Account Maintenance — Traditional",    unit: "$ / member / yr", scale: 1,   precision: 0,  step: 10,   min: 0,  max: 1000  },
+      { key: "maintenanceDigital",             label: "Account Maintenance — Digital",        unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 500   },
+      { key: "transactionCostTrad",            label: "Transaction Cost — Teller",            unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.25, min: 0,  max: 20    },
+      { key: "transactionCostDigital",         label: "Transaction Cost — Digital",           unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.01, min: 0,  max: 5     },
+      { key: "avgTellerTransactionsPerMonth",  label: "Avg Teller Transactions / Month",      unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10    },
+      { key: "avgDigitalTransactionsPerMonth", label: "Avg Digital Transactions / Month",     unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
+      { key: "platformCost",                   label: "Digital Platform Infrastructure",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200   },
+      { key: "fraudCost",                      label: "Digital Fraud & ID Verification",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
+      { key: "costPerBranchVisit",             label: "Cost Per Branch Visit",                unit: "$ / visit",       scale: 1,   precision: 2,  step: 0.5,  min: 0,  max: 50    },
+      { key: "freeVisits",                     label: "Free Branch Visits / Yr",              unit: "visits / yr",     scale: 1,   precision: 0,  step: 1,    min: 0,  max: 12    },
     ],
   },
   {
     id: "retention",
     label: "Retention",
     fields: [
-      { key: "digitalAttritionYear1",       label: "Digital attrition — year 1",         unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
-      { key: "digitalAttritionSteadyState", label: "Digital attrition — steady state",   unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+      { key: "digitalAttritionYear1",       label: "Digital Attrition — Year 1",        unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+      { key: "digitalAttritionSteadyState", label: "Digital Attrition — Steady State",  unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
     ],
   },
 ];

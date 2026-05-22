@@ -21,6 +21,7 @@ export const DEFAULT_INPUTS = {
   avgDepositBalance: 18000,
   rateBump: 50,          // bps above standard rate offered to digital members
   ratePremiumDecay: 10,  // bps/year the premium erodes as competitors catch up
+  rateBumpFloor: 0,      // bps — decay stops here; 0 means the premium fully erodes
 
   // Loans
   loanPenetrationRate: 0.40,
@@ -302,7 +303,8 @@ export function computeServicingDelta(totalDigitalMembers, inputs) {
  */
 export function computeRatePremiumCost(totalDigitalMembers, inputs, month) {
   const decayPerMonth = inputs.ratePremiumDecay / 12;
-  const effectiveBump = Math.max(0, inputs.rateBump - (month - 1) * decayPerMonth);
+  const floor = inputs.rateBumpFloor ?? 0;
+  const effectiveBump = Math.max(floor, inputs.rateBump - (month - 1) * decayPerMonth);
 
   const depositPremiumPerMemberPerMonth =
     inputs.avgDepositBalance * (effectiveBump / 10000) / 12;

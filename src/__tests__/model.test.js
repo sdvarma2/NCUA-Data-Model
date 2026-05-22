@@ -54,6 +54,7 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.avgDepositBalance).toBe(18000);
     expect(DEFAULT_INPUTS.rateBump).toBe(50);
     expect(DEFAULT_INPUTS.ratePremiumDecay).toBe(10);
+    expect(DEFAULT_INPUTS.rateBumpFloor).toBe(0);
   });
 
   it("has expected loan defaults", () => {
@@ -283,9 +284,23 @@ describe("computeRatePremiumCost", () => {
     expect(later).toBeLessThan(early);
   });
 
-  it("effective bump never goes below zero", () => {
+  it("effective bump never goes below rateBumpFloor (default floor = 0)", () => {
     const cost = computeRatePremiumCost(100, DEFAULT_INPUTS, 100);
     expect(cost).toBeGreaterThanOrEqual(0);
+  });
+
+  it("rate bump decays to floor and stops — does not go lower", () => {
+    // 50 bps initial, 50 bps/yr decay, 20 bps floor → should stabilise at 20 bps, not 0
+    const inputs = { ...DEFAULT_INPUTS, rateBump: 50, ratePremiumDecay: 50, rateBumpFloor: 20 };
+    const costEarly = computeRatePremiumCost(100, inputs, 1);   // bump ≈ 50 bps
+    const costLate  = computeRatePremiumCost(100, inputs, 60);  // fully decayed — should be floor
+    // Cost at floor must be positive (floor > 0) and less than early cost
+    expect(costLate).toBeGreaterThan(0);
+    expect(costLate).toBeLessThan(costEarly);
+    // Verify cost stays constant once floor is reached (months 36 vs 60 with 50 bps/yr decay)
+    const cost36 = computeRatePremiumCost(100, inputs, 36);
+    const cost60 = computeRatePremiumCost(100, inputs, 60);
+    expect(cost60).toBeCloseTo(cost36, 0);
   });
 
   it("scales linearly with total digital members", () => {
