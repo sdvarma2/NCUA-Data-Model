@@ -58,7 +58,7 @@ describe("DEFAULT_INPUTS", () => {
   });
 
   it("has expected loan defaults", () => {
-    expect(DEFAULT_INPUTS.loanPenetrationRate).toBe(0.20);
+    expect(DEFAULT_INPUTS.loanPenetrationRate).toBe(0.10);
     expect(DEFAULT_INPUTS.avgLoanBalance).toBe(22000);
     expect(DEFAULT_INPUTS.rateCut).toBe(25);
   });
@@ -273,9 +273,9 @@ describe("computeServicingDelta", () => {
 
 describe("computeRatePremiumCost", () => {
   it("applies full rateBump at month 1 (no decay yet)", () => {
-    // 100 members: deposit = 18000 × 0.005 / 12 = 7.5, loan = 22000 × 0.20 × 0.0025 / 12 ≈ 0.917
+    // 100 members: deposit = 18000 × 0.005 / 12 = 7.5, loan = 22000 × 0.10 × 0.0025 / 12 ≈ 0.458
     const cost = computeRatePremiumCost(100, DEFAULT_INPUTS, 1);
-    expect(cost).toBeCloseTo(100 * (7.5 + 0.9167), 0);
+    expect(cost).toBeCloseTo(100 * (7.5 + 0.4583), 0);
   });
 
   it("reduces effective rate bump over time due to decay", () => {

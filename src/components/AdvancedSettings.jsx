@@ -322,7 +322,7 @@ const SECTIONS = [
       { key: "rateBump",         label: "Initial Rate Bump",  unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 300,
         tooltip: "The Initial Rate Bump represents the premium you'll pay on deposits initially to attract new members." },
       { key: "ratePremiumDecay", label: "Rate Bump Decay",    unit: "bps / yr", scale: 1, precision: 0, step: 1, min: 0, max: 50,
-        tooltip: "The Rate Bump Decay represents how many basis points per year you'll lower your deposit rate premium by." },
+        tooltip: "The Rate Bump Decay represents how many basis points per year you'll lower your deposit rate bump by." },
       { key: "rateBumpFloor",    label: "Rate Bump Floor",    unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 200,
         tooltip: "The Rate Bump Floor represents the lowest value your Rate Bump will decay to. When set to 0, the premium you pay over standard rates will decay each year until the rate matches your standard rates." },
       { key: "depositCannibRateA", label: "Deposit Cannibalization — Expansion Markets Only", unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
@@ -333,7 +333,24 @@ const SECTIONS = [
     id: "loans",
     label: "Loans",
     fields: [
-      { key: "loanPenetrationRate", label: "Loan Penetration Rate",                          unit: "% of members",   scale: 100, precision: 0, step: 1,    min: 0,     max: 100    },
+      { key: "loanPenetrationRate", label: "Loan Penetration Rate",                          unit: "% of members",   scale: 100, precision: 0, step: 1,    min: 0,     max: 100,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              20% is the recommended ceiling for this value, especially in the early years of an expansion based on the following:
+            </p>
+            <ul className="list-disc list-outside pl-3.5 space-y-1.5">
+              <li>
+                SoFi (~20%) — the most directly comparable data point. SoFi is lending-native, has actively pushed loan cross-sell for years, and still sits at ~20% of members holding a loan. A credit union launching a new digital channel has less lending brand recognition than SoFi, not more.
+              </li>
+              <li>
+                67% digital loan application abandonment rate (Cornerstone/Alkami 2024) — a structural headwind that suppresses actual uptake well below intent.
+              </li>
+            </ul>
+          </>
+        ),
+      },
       { key: "avgLoanBalance",      label: "Avg Loan Balance",                               unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
       { key: "rateCut",             label: "Rate Cut — Digital Loans",                        unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
       { key: "loanCannibRateA",     label: "Loan Cannibalization — Expansion Markets Only",   unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
