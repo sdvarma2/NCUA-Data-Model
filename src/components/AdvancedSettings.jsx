@@ -404,8 +404,49 @@ const SECTIONS = [
       { key: "avgDigitalTransactionsPerMonth", label: "Avg Digital Transactions / Month",     unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
       { key: "platformCost",                   label: "Digital Platform Infrastructure",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200   },
       { key: "fraudCost",                      label: "Digital Fraud & ID Verification",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
-      { key: "costPerBranchVisit",             label: "Cost Per Branch Visit",                unit: "$ / visit",       scale: 1,   precision: 2,  step: 0.5,  min: 0,  max: 50    },
-      { key: "freeVisits",                     label: "Free Branch Visits / Yr",              unit: "visits / yr",     scale: 1,   precision: 0,  step: 1,    min: 0,  max: 12    },
+      { key: "costPerBranchVisit", label: "Cost Per Branch Visit",   unit: "$ / visit",   scale: 1, precision: 2, step: 0.5, min: 0, max: 50,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The cost absorbed by the credit union each time a digital member visits a branch.
+              This flows into the <strong>digital member cost</strong> — it reduces net
+              per-member savings, it is not a savings figure.
+            </p>
+            <p>
+              This is distinct from Transaction Cost — Teller above, which measures the
+              operational cost of a teller interaction for a <em>traditional</em> member.
+              A branch visit may involve multiple interactions; this field reflects the
+              fully-loaded cost of the visit itself (staff time + facility overhead).
+            </p>
+          </>
+        ),
+      },
+      { key: "freeVisits",         label: "Free Branch Visits / Yr", unit: "visits / yr", scale: 1, precision: 0, step: 1,   min: 0, max: 12,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The number of branch visits per year included in the digital product offering.
+              Each visit is absorbed by the credit union at the Cost Per Branch Visit rate
+              above, reducing net per-member servicing savings.
+            </p>
+            <p className="mb-2">
+              Setting this to 0 models a pure digital-only product with no branch access.
+              The 4-visit default (roughly quarterly) reflects a common
+              &ldquo;digital-first, branch-optional&rdquo; positioning — enough to handle
+              complex servicing needs like loan closings or disputes without eroding the
+              digital cost advantage.
+            </p>
+            <p>
+              Branch access also serves a strategic purpose: it bridges members who move
+              between your digital service area and existing branch footprint, and positions
+              the product to integrate naturally as the branch network expands into new
+              markets over time.
+            </p>
+          </>
+        ),
+      },
     ],
   },
   {

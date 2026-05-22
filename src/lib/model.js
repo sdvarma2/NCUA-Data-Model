@@ -286,7 +286,7 @@ export function computeServicingDelta(totalDigitalMembers, inputs) {
     tellerPerYear  * inputs.transactionCostTrad +
     digitalPerYear * inputs.transactionCostDigital;
 
-  const branchVisitSubsidy = Math.min(inputs.freeVisits, 4) * inputs.costPerBranchVisit;
+  const branchVisitSubsidy = inputs.freeVisits * inputs.costPerBranchVisit;
   const digitalCostPerMemberPerYear =
     inputs.maintenanceDigital +
     digitalPerYear * inputs.transactionCostDigital +

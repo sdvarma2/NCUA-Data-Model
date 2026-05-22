@@ -252,6 +252,17 @@ describe("computeServicingDelta", () => {
     expect(withoutVisits).toBeGreaterThan(withVisits);
   });
 
+  it("respects freeVisits values above 4 (regression: was capped at 4)", () => {
+    const four  = computeServicingDelta(1000, { ...DEFAULT_INPUTS, freeVisits: 4,  costPerBranchVisit: 10 });
+    const eight = computeServicingDelta(1000, { ...DEFAULT_INPUTS, freeVisits: 8,  costPerBranchVisit: 10 });
+    const zero  = computeServicingDelta(1000, { ...DEFAULT_INPUTS, freeVisits: 0,  costPerBranchVisit: 10 });
+    // Each extra visit costs $10/yr per member; gap between tiers should be 4 × $10 = $40/yr = ~$3.33/mo per member
+    expect(zero).toBeGreaterThan(four);
+    expect(four).toBeGreaterThan(eight);
+    expect(zero - four).toBeCloseTo(1000 * 4 * 10 / 12, 0);
+    expect(four - eight).toBeCloseTo(1000 * 4 * 10 / 12, 0);
+  });
+
   it("returns zero savings when digital and traditional costs are equal", () => {
     const equalInputs = {
       ...DEFAULT_INPUTS,
