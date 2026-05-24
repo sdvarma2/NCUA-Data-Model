@@ -1,5 +1,6 @@
 import {
   DEFAULT_INPUTS,
+  DEFAULT_FOOTPRINT_INPUTS,
   MARKET_COMPETITIVENESS_PRESETS,
   calibrateAcquisition,
   computeCPA,
@@ -523,5 +524,114 @@ describe("runSimulation", () => {
     // p and q are fitted only to inputs, not to scenario
     expect(resultA.calibration.p).toBeCloseTo(resultB.calibration.p, 10);
     expect(resultA.calibration.q).toBeCloseTo(resultB.calibration.q, 10);
+  });
+
+  it("footprintCalibration is null when no footprintInputs passed", () => {
+    expect(resultA.footprintCalibration).toBeNull();
+    expect(resultB.footprintCalibration).toBeNull();
+  });
+});
+
+// ─── DEFAULT_FOOTPRINT_INPUTS ─────────────────────────────────────────────────
+
+describe("DEFAULT_FOOTPRINT_INPUTS", () => {
+  it("has all required acquisition keys", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("marketName");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("tam");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("samPct");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("m12Target");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("m36Target");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("m60Target");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("initialCPA");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("steadyStateCPA");
+    expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("monthsToSteadyState");
+  });
+
+  it("CPA defaults to 0 (no active marketing by default)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.initialCPA).toBe(0);
+    expect(DEFAULT_FOOTPRINT_INPUTS.steadyStateCPA).toBe(0);
+  });
+
+  it("has higher avgDepositBalance than DEFAULT_INPUTS (established members)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.avgDepositBalance).toBeGreaterThan(DEFAULT_INPUTS.avgDepositBalance);
+  });
+
+  it("has higher loanPenetrationRate than DEFAULT_INPUTS (existing product awareness)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.loanPenetrationRate).toBeGreaterThan(DEFAULT_INPUTS.loanPenetrationRate);
+  });
+
+  it("has lower attrition than DEFAULT_INPUTS (established relationship stickiness)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.digitalAttritionYear1).toBeLessThan(DEFAULT_INPUTS.digitalAttritionYear1);
+    expect(DEFAULT_FOOTPRINT_INPUTS.digitalAttritionSteadyState).toBeLessThan(DEFAULT_INPUTS.digitalAttritionSteadyState);
+  });
+
+  it("has lower rateBump than DEFAULT_INPUTS (less incentive needed inside footprint)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.rateBump).toBeLessThan(DEFAULT_INPUTS.rateBump);
+  });
+
+  it("has conservative membership milestones (organic/cross-sell adoption is slower)", () => {
+    expect(DEFAULT_FOOTPRINT_INPUTS.m12Target).toBeLessThan(DEFAULT_INPUTS.m12Target);
+    expect(DEFAULT_FOOTPRINT_INPUTS.m60Target).toBeLessThan(DEFAULT_INPUTS.m60Target);
+  });
+});
+
+// ─── runSimulation — blended Scenario B ──────────────────────────────────────
+
+describe("runSimulation — blended footprint (Scenario B)", () => {
+  const FOOTPRINT_INPUTS = {
+    ...DEFAULT_INPUTS,
+    ...DEFAULT_FOOTPRINT_INPUTS,
+    tam: 30000,
+    samPct: 35,
+    m12Target: 100,
+    m36Target: 400,
+    m60Target: 800,
+  };
+
+  let blended;
+  let singleB;
+
+  beforeAll(() => {
+    blended = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b", FOOTPRINT_INPUTS);
+    singleB = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b");
+  });
+
+  it("returns footprintCalibration when footprintInputs provided", () => {
+    expect(blended.footprintCalibration).not.toBeNull();
+    expect(blended.footprintCalibration).toHaveProperty("p");
+    expect(blended.footprintCalibration).toHaveProperty("q");
+    expect(blended.footprintCalibration).toHaveProperty("sam");
+  });
+
+  it("blended totalActiveMembers exceeds single-stream Scenario B at month 60", () => {
+    expect(blended.months[59].totalActiveMembers).toBeGreaterThan(
+      singleB.months[59].totalActiveMembers
+    );
+  });
+
+  it("exposes per-stream member breakdown on each month", () => {
+    const m = blended.months[30];
+    expect(m).toHaveProperty("totalActiveMembersExpansion");
+    expect(m).toHaveProperty("totalActiveMembersFootprint");
+    expect(m.totalActiveMembersExpansion + m.totalActiveMembersFootprint)
+      .toBeCloseTo(m.totalActiveMembers, -1);
+  });
+
+  it("footprint stream contributes positive members by month 12", () => {
+    expect(blended.months[11].totalActiveMembersFootprint).toBeGreaterThan(0);
+  });
+
+  it("cannibalization is applied once (not doubled vs single-stream Scenario B)", () => {
+    // Cannibalization is institution-level and should be identical between single and blended
+    expect(blended.months[0].monthlyCannibalizationCost).toBeCloseTo(
+      singleB.months[0].monthlyCannibalizationCost, 0
+    );
+  });
+
+  it("footprintSamPenetrationPct is between 0 and 1", () => {
+    blended.months.forEach((m) => {
+      expect(m.footprintSamPenetrationPct).toBeGreaterThanOrEqual(0);
+      expect(m.footprintSamPenetrationPct).toBeLessThanOrEqual(1);
+    });
   });
 });

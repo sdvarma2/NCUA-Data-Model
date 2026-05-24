@@ -51,6 +51,41 @@ export const DEFAULT_INPUTS = {
   digitalAttritionSteadyState: 0.07,  // 7%/yr after month 12
 };
 
+/**
+ * Default inputs for the Existing Footprint sub-model (Scenario B only).
+ * Only the fields that differ from DEFAULT_INPUTS are listed here; all shared
+ * fields (servicing, cannibalization, branch visits, etc.) are inherited from
+ * the user's customized base inputs in page.jsx.
+ */
+export const DEFAULT_FOOTPRINT_INPUTS = {
+  marketName: "Existing Branch Footprint",
+  tam: 150000,       // bounded by existing service-area geography
+  samPct: 35,        // existing member + near-member universe; slightly lower than cold market
+  m12Target: 500,    // organic/cross-sell adoption is slower than a marketed launch
+  m36Target: 2000,
+  m60Target: 4000,
+
+  // CPA defaults to 0 — no active marketing; page.jsx enforces 0 when toggle is off
+  initialCPA: 0,
+  steadyStateCPA: 0,
+  monthsToSteadyState: 24,
+
+  // Deposits — established members need less rate incentive
+  avgDepositBalance: 22000,
+  rateBump: 25,
+  ratePremiumDecay: 10,
+  rateBumpFloor: 10,
+
+  // Loans — existing members have higher product awareness
+  loanPenetrationRate: 0.20,
+  avgLoanBalance: 12000,
+  rateCut: 15,
+
+  // Retention — established relationships are stickier
+  digitalAttritionYear1: 0.10,
+  digitalAttritionSteadyState: 0.05,
+};
+
 /** Market Competitiveness presets — applied immediately when the toggle changes. */
 export const MARKET_COMPETITIVENESS_PRESETS = {
   Low:    { initialCPA: 300, steadyStateCPA: 50,  monthsToSteadyState: 18 },
@@ -347,46 +382,91 @@ export function findBreakEven(months) {
 }
 
 /**
- * Run the full 60-month simulation.
+ * Runs the 60-month member accumulation loop for a single market stream.
+ * Does NOT apply cannibalization — that is applied once at the combined level
+ * in runSimulation so it is never double-counted across streams.
  *
- * @param {object} institution  Selected institution from ncua_model_data.json
- * @param {object} inputs       Merged DEFAULT_INPUTS + any user overrides
- * @param {string} scenario     "scenario_a" | "scenario_b"
- * @returns {{ months: object[], calibration: object }}
- *   months[0..59] — one object per month (see PROJECT_BRIEF.md §Month object shape)
- *   calibration   — Bass parameters, SAM, residuals, realism indicator
+ * @param {object} institution   Selected institution
+ * @param {object} inputs        Stream-specific inputs (expansion or footprint)
+ * @param {number[]} bassGrossCurve  60-element array from computeBassCurve
+ * @returns {object[]}  60-element array of per-month stream economics
  */
-export function runSimulation(institution, inputs, scenario) {
-  // Calibration is scenario-independent; runs once per inputs change.
-  const calibration = calibrateAcquisition(inputs);
-  const { bassGrossCurve, sam } = calibration;
-
+function runStream(institution, inputs, bassGrossCurve) {
   const months = [];
-  let totalActiveMembers      = 0;
+  let totalActiveMembers = 0;
+
+  for (let m = 1; m <= 60; m++) {
+    const attrition = (m <= 12 ? inputs.digitalAttritionYear1 : inputs.digitalAttritionSteadyState) / 12;
+    const newMembersGross = bassGrossCurve[m - 1];
+    totalActiveMembers = totalActiveMembers * (1 - attrition) + newMembersGross;
+
+    const cpa = computeCPA(m, inputs);
+    months.push({
+      newMembersGross,
+      totalActiveMembers,
+      cpa,
+      monthlyAcquisitionSpend:    newMembersGross * cpa,
+      monthlyRatePremiumCost:     computeRatePremiumCost(totalActiveMembers, inputs, m),
+      monthlyServicingCostSavings: computeServicingDelta(totalActiveMembers, inputs),
+      monthlyGrossNII:            computeNIIContribution(totalActiveMembers, inputs, institution),
+    });
+  }
+
+  return months;
+}
+
+/**
+ * Run the full 60-month simulation, optionally blending a second inside-footprint
+ * stream for Scenario B.
+ *
+ * @param {object} institution      Selected institution from ncua_model_data.json
+ * @param {object} inputs           Merged DEFAULT_INPUTS + user overrides (expansion market)
+ * @param {string} scenario         "scenario_a" | "scenario_b"
+ * @param {object|null} footprintInputs  Merged footprint inputs; only used when
+ *                                       scenario === "scenario_b". Pass null to run
+ *                                       single-stream (current behaviour for Scenario A).
+ * @returns {{ months, calibration, footprintCalibration }}
+ *   footprintCalibration is null when footprintInputs is not provided.
+ */
+export function runSimulation(institution, inputs, scenario, footprintInputs = null) {
+  // ── Expansion market stream ──────────────────────────────────────────────────
+  const calibration    = calibrateAcquisition(inputs);
+  const expansionStream = runStream(institution, inputs, calibration.bassGrossCurve);
+
+  // ── Optional inside-footprint stream (Scenario B only) ──────────────────────
+  const hasFootprint = footprintInputs !== null && scenario === "scenario_b";
+  let footprintCalibration = null;
+  let footprintStream      = null;
+
+  if (hasFootprint) {
+    footprintCalibration = calibrateAcquisition(footprintInputs);
+    footprintStream      = runStream(institution, footprintInputs, footprintCalibration.bassGrossCurve);
+  }
+
+  // ── Blend streams + apply cannibalization once ───────────────────────────────
+  const months = [];
   let cumulativeAcquisitionSpend = 0;
   let cumulativeNetContribution  = 0;
   let cumulativeCannibalDrag     = 0;
 
   for (let m = 1; m <= 60; m++) {
-    // Attrition: year-1 rate for first 12 program months, steady-state thereafter
-    const attrition   = (m <= 12 ? inputs.digitalAttritionYear1 : inputs.digitalAttritionSteadyState) / 12;
-    const newMembersGross = bassGrossCurve[m - 1];
-    totalActiveMembers = totalActiveMembers * (1 - attrition) + newMembersGross;
+    const exp  = expansionStream[m - 1];
+    const foot = hasFootprint ? footprintStream[m - 1] : null;
 
-    // Acquisition economics
-    const cpa                   = computeCPA(m, inputs);
-    const monthlyAcquisitionSpend = newMembersGross * cpa;
-    cumulativeAcquisitionSpend += monthlyAcquisitionSpend;
+    const totalActiveMembers      = exp.totalActiveMembers      + (foot ? foot.totalActiveMembers      : 0);
+    const monthlyAcquisitionSpend = exp.monthlyAcquisitionSpend + (foot ? foot.monthlyAcquisitionSpend : 0);
+    const monthlyRatePremiumCost  = exp.monthlyRatePremiumCost  + (foot ? foot.monthlyRatePremiumCost  : 0);
+    const monthlyServicingCostSavings = exp.monthlyServicingCostSavings + (foot ? foot.monthlyServicingCostSavings : 0);
+    const monthlyGrossNII         = exp.monthlyGrossNII          + (foot ? foot.monthlyGrossNII          : 0);
 
-    // Downstream economics
+    // Cannibalization is institution-level, applied once regardless of stream count
     const cannibal = computeCannibalCost(institution, inputs, scenario);
     const monthlyCannibalizationCost = cannibal.depositCannibalizationCost + cannibal.loanCannibalizationCost;
-    const monthlyRatePremiumCost     = computeRatePremiumCost(totalActiveMembers, inputs, m);
-    const monthlyServicingCostSavings = computeServicingDelta(totalActiveMembers, inputs);
-    const monthlyGrossNII            = computeNIIContribution(totalActiveMembers, inputs, institution);
+
+    cumulativeAcquisitionSpend += monthlyAcquisitionSpend;
 
     const monthlyNetContribution =
-      -monthlyAcquisitionSpend
+      - monthlyAcquisitionSpend
       - monthlyRatePremiumCost
       - monthlyCannibalizationCost
       + monthlyServicingCostSavings
@@ -398,25 +478,33 @@ export function runSimulation(institution, inputs, scenario) {
     months.push({
       month: m,
 
-      // Acquisition
-      newMembersGross: Math.round(newMembersGross),
-      newMembersActive: Math.round(newMembersGross * (1 - inputs.digitalAttritionYear1)),
-      totalActiveMembers: Math.round(totalActiveMembers),
-      cpa: Math.round(cpa),
-      monthlyAcquisitionSpend: Math.round(monthlyAcquisitionSpend),
-      cumulativeAcquisitionSpend: Math.round(cumulativeAcquisitionSpend),
-      samPenetrationPct: sam > 0 ? Math.min(1, totalActiveMembers / sam) : 0,
+      // Acquisition — combined totals + per-stream breakdown
+      newMembersGross: Math.round(exp.newMembersGross + (foot ? foot.newMembersGross : 0)),
+      newMembersActive: Math.round(
+        exp.newMembersGross * (1 - inputs.digitalAttritionYear1) +
+        (foot ? foot.newMembersGross * (1 - footprintInputs.digitalAttritionYear1) : 0)
+      ),
+      totalActiveMembers:           Math.round(totalActiveMembers),
+      totalActiveMembersExpansion:  Math.round(exp.totalActiveMembers),
+      totalActiveMembersFootprint:  foot ? Math.round(foot.totalActiveMembers) : 0,
+      cpa: Math.round(exp.cpa),   // expansion CPA shown as primary
+      monthlyAcquisitionSpend:      Math.round(monthlyAcquisitionSpend),
+      cumulativeAcquisitionSpend:   Math.round(cumulativeAcquisitionSpend),
+      samPenetrationPct: calibration.sam > 0
+        ? Math.min(1, exp.totalActiveMembers / calibration.sam) : 0,
+      footprintSamPenetrationPct: footprintCalibration?.sam > 0
+        ? Math.min(1, (foot?.totalActiveMembers ?? 0) / footprintCalibration.sam) : 0,
 
       // Economics
-      monthlyRatePremiumCost: Math.round(monthlyRatePremiumCost),
-      monthlyCannibalizationCost: Math.round(monthlyCannibalizationCost),
-      depositCannibalizationCost: Math.round(cannibal.depositCannibalizationCost),
-      loanCannibalizationCost: Math.round(cannibal.loanCannibalizationCost),
-      monthlyServicingCostSavings: Math.round(monthlyServicingCostSavings),
-      monthlyGrossNII: Math.round(monthlyGrossNII),
-      monthlyNetContribution: Math.round(monthlyNetContribution),
-      cumulativeNetContribution: Math.round(cumulativeNetContribution),
-      cumulativeCannibalDrag: Math.round(cumulativeCannibalDrag),
+      monthlyRatePremiumCost:       Math.round(monthlyRatePremiumCost),
+      monthlyCannibalizationCost:   Math.round(monthlyCannibalizationCost),
+      depositCannibalizationCost:   Math.round(cannibal.depositCannibalizationCost),
+      loanCannibalizationCost:      Math.round(cannibal.loanCannibalizationCost),
+      monthlyServicingCostSavings:  Math.round(monthlyServicingCostSavings),
+      monthlyGrossNII:              Math.round(monthlyGrossNII),
+      monthlyNetContribution:       Math.round(monthlyNetContribution),
+      cumulativeNetContribution:    Math.round(cumulativeNetContribution),
+      cumulativeCannibalDrag:       Math.round(cumulativeCannibalDrag),
       isBreakEvenMonth: false,
     });
   }
@@ -426,5 +514,5 @@ export function runSimulation(institution, inputs, scenario) {
     months[breakEvenMonth - 1].isBreakEvenMonth = true;
   }
 
-  return { months, calibration };
+  return { months, calibration, footprintCalibration };
 }

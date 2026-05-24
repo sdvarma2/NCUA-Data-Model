@@ -5,8 +5,8 @@ import InstitutionSelector from "@/components/InstitutionSelector";
 import InstitutionProfileCard from "@/components/InstitutionProfileCard";
 import ScenarioToggle from "@/components/ScenarioToggle";
 import ModelInputs from "@/components/ModelInputs";
-import AdvancedSettings from "@/components/AdvancedSettings";
-import { runSimulation, DEFAULT_INPUTS } from "@/lib/model";
+import AdvancedSettings, { FootprintSettings } from "@/components/AdvancedSettings";
+import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS } from "@/lib/model";
 import { resolveInputs } from "@/lib/levers";
 
 export default function Home() {
@@ -17,6 +17,8 @@ export default function Home() {
   const [scenario, setScenario] = useState("scenario_a");
   const [levers, setLevers] = useState({});
   const [advancedOverrides, setAdvancedOverrides] = useState({});
+  const [footprintMarketing, setFootprintMarketing] = useState(false);
+  const [footprintOverrides, setFootprintOverrides] = useState({});
 
   useEffect(() => {
     fetch("/ncua_model_data.json")
@@ -47,11 +49,27 @@ export default function Home() {
     setAdvancedOverrides((prev) => ({ ...prev, ...overrides }));
   }
 
+  /** Single-key override for the inside-footprint panel. */
+  function handleFootprintChange(key, value) {
+    setFootprintOverrides((prev) => ({ ...prev, [key]: value }));
+  }
+
   // Merge DEFAULT_INPUTS with any user overrides from Advanced Settings
   const inputs = useMemo(
     () => ({ ...DEFAULT_INPUTS, ...advancedOverrides }),
     [advancedOverrides]
   );
+
+  // Inside-footprint inputs: start from the user's customised base inputs so
+  // shared fields (servicing, branch visits, etc.) stay in sync, then apply
+  // footprint-specific defaults and any user overrides for the footprint panel.
+  // When marketing is off, CPA is forced to $0 — no charge for incidental adoption.
+  const footprintInputs = useMemo(() => ({
+    ...inputs,
+    ...DEFAULT_FOOTPRINT_INPUTS,
+    ...footprintOverrides,
+    ...(footprintMarketing ? {} : { initialCPA: 0, steadyStateCPA: 0 }),
+  }), [inputs, footprintOverrides, footprintMarketing]);
 
   // Run both scenarios simultaneously so switching replays instantly
   const simulationA = useMemo(
@@ -59,8 +77,8 @@ export default function Home() {
     [selected, inputs]
   );
   const simulationB = useMemo(
-    () => selected ? runSimulation(selected, inputs, "scenario_b") : null,
-    [selected, inputs]
+    () => selected ? runSimulation(selected, inputs, "scenario_b", footprintInputs) : null,
+    [selected, inputs, footprintInputs]
   );
 
   const activeSimulation = scenario === "scenario_a" ? simulationA : simulationB;
@@ -109,6 +127,14 @@ export default function Home() {
                   onChange={handleAdvancedChange}
                   onBatchChange={handleAdvancedBatchChange}
                 />
+                {scenario === "scenario_b" && (
+                  <FootprintSettings
+                    inputs={footprintInputs}
+                    marketing={footprintMarketing}
+                    onMarketingChange={setFootprintMarketing}
+                    onChange={handleFootprintChange}
+                  />
+                )}
               </section>
 
               {/* Temporary readout — will be replaced by simulation UI in Steps 8–13 */}

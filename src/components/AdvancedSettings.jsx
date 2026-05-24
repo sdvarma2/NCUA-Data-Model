@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { DEFAULT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
+import { DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
 
 // ── Info tooltip ─────────────────────────────────────────────────────────────
 
@@ -488,6 +488,38 @@ function SectionBlock({ section, inputs, onChange }) {
   );
 }
 
+// ── Footprint-specific sections (Scenario B panel) ───────────────────────────
+
+const FOOTPRINT_SECTIONS = [
+  {
+    id: "fp-deposits",
+    label: "Deposits",
+    fields: [
+      { key: "avgDepositBalance",  label: "Avg Deposit Balance",       unit: "$ / member",     scale: 1,   precision: 0, step: 500, min: 1000, max: 100000 },
+      { key: "rateBump",           label: "Initial Rate Bump",          unit: "bps",            scale: 1,   precision: 0, step: 5,   min: 0,    max: 300    },
+      { key: "ratePremiumDecay",   label: "Rate Bump Decay",            unit: "bps / yr",       scale: 1,   precision: 0, step: 1,   min: 0,    max: 50     },
+      { key: "rateBumpFloor",      label: "Rate Bump Floor",            unit: "bps",            scale: 1,   precision: 0, step: 5,   min: 0,    max: 200    },
+    ],
+  },
+  {
+    id: "fp-loans",
+    label: "Loans",
+    fields: [
+      { key: "loanPenetrationRate", label: "Loan Penetration Rate",     unit: "% of members",  scale: 100, precision: 0, step: 1,   min: 0,    max: 100    },
+      { key: "avgLoanBalance",      label: "Average Loan Balance",      unit: "$ / borrower",  scale: 1,   precision: 0, step: 500, min: 1000, max: 100000 },
+      { key: "rateCut",             label: "Rate Cut — Digital Loans",  unit: "bps",            scale: 1,   precision: 0, step: 5,   min: 0,    max: 200    },
+    ],
+  },
+  {
+    id: "fp-retention",
+    label: "Retention",
+    fields: [
+      { key: "digitalAttritionYear1",       label: "Digital Attrition — Year 1",       unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+      { key: "digitalAttritionSteadyState", label: "Digital Attrition — Steady State", unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+    ],
+  },
+];
+
 // ── Top-level component ───────────────────────────────────────────────────────
 
 export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
@@ -563,6 +595,201 @@ export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
               className="text-sm text-zinc-500 hover:text-zinc-700 underline underline-offset-2 transition-colors min-h-[44px] px-2"
             >
               Reset all to defaults
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Scenario B: Existing Footprint Settings ───────────────────────────────────
+
+/**
+ * Second collapsible panel — visible only when Scenario B is active.
+ * Configures the inside-footprint member stream that runs in parallel with the
+ * expansion-market stream and is blended in runSimulation().
+ */
+export function FootprintSettings({ inputs, marketing, onMarketingChange, onChange }) {
+  const [open, setOpen] = useState(false);
+  const sam = Math.round(inputs.tam * (inputs.samPct / 100));
+
+  function handleReset() {
+    for (const key of Object.keys(DEFAULT_FOOTPRINT_INPUTS)) {
+      onChange(key, DEFAULT_FOOTPRINT_INPUTS[key]);
+    }
+    // If marketing was on, also reset the CPA fields to 0 (no-marketing default)
+    if (!marketing) {
+      onChange("initialCPA",    DEFAULT_FOOTPRINT_INPUTS.initialCPA);
+      onChange("steadyStateCPA", DEFAULT_FOOTPRINT_INPUTS.steadyStateCPA);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-2 text-sm font-medium text-zinc-700 hover:text-zinc-900 transition-colors min-h-[44px] py-2"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={`w-4 h-4 transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          <path
+            fillRule="evenodd"
+            d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+        All Markets — Existing Footprint Settings
+        {!open && (
+          <span className="text-xs text-zinc-500 font-normal">
+            — configure inside-footprint acquisition &amp; economics
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-4">
+
+          {/* ── Marketing toggle ──────────────────────────────────────────── */}
+          <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3.5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={marketing}
+                onChange={(e) => onMarketingChange(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-400 accent-zinc-800 shrink-0"
+              />
+              <span className="text-sm text-zinc-700 leading-snug">
+                <span className="font-medium">Actively market inside existing branch footprint</span>
+                <span className="block text-zinc-500 mt-0.5">
+                  If unchecked, CPA is $0 — any inside-footprint acquisitions are incidental
+                  to existing marketing efforts. Onboarding costs are already captured in
+                  the shared servicing fields.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {/* ── Acquisition ───────────────────────────────────────────────── */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 mb-1 pt-0">
+              Acquisition
+            </h3>
+            <div className="rounded-lg border border-zinc-200 bg-white px-4 divide-y-0">
+
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+                Market Definition
+              </p>
+              <TextField
+                fieldKey="marketName"
+                label="Market Name / Geography"
+                value={inputs.marketName}
+                onChange={onChange}
+              />
+              <NumberField
+                fieldKey="tam"
+                label="Total Addressable Market (TAM)"
+                unit="households"
+                scale={1} precision={0} step={10000} min={10000} max={5000000}
+                value={inputs.tam}
+                onChange={onChange}
+              />
+              <NumberField
+                fieldKey="samPct"
+                label="Serviceable Addressable Market (SAM)"
+                unit="% of TAM"
+                scale={1} precision={0} step={5} min={5} max={100}
+                value={inputs.samPct}
+                onChange={onChange}
+                tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, creditworthy, etc. This is who you can actually convert."
+              />
+              <DerivedField label="SAM # of Households" value={sam.toLocaleString()} unit="households" />
+
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+                Membership Milestones (net active members)
+              </p>
+              <NumberField
+                fieldKey="m12Target"
+                label="Target Active Members — Month 12"
+                unit="members"
+                scale={1} precision={0} step={100} min={0} max={500000}
+                value={inputs.m12Target}
+                onChange={onChange}
+              />
+              <NumberField
+                fieldKey="m36Target"
+                label="Target Active Members — Month 36"
+                unit="members"
+                scale={1} precision={0} step={250} min={0} max={500000}
+                value={inputs.m36Target}
+                onChange={onChange}
+              />
+              <NumberField
+                fieldKey="m60Target"
+                label="Target Active Members — Month 60"
+                unit="members"
+                scale={1} precision={0} step={500} min={0} max={500000}
+                value={inputs.m60Target}
+                onChange={onChange}
+              />
+
+              {marketing && (
+                <>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+                    Acquisition Economics
+                  </p>
+                  <NumberField
+                    fieldKey="initialCPA"
+                    label="Initial Cost Per (Active Member) Acquisition"
+                    unit="$ / active member"
+                    scale={1} precision={0} step={25} min={0} max={2000}
+                    value={inputs.initialCPA}
+                    onChange={onChange}
+                  />
+                  <NumberField
+                    fieldKey="steadyStateCPA"
+                    label="Steady-State CPA"
+                    unit="$ / active member"
+                    scale={1} precision={0} step={5} min={0} max={500}
+                    value={inputs.steadyStateCPA}
+                    onChange={onChange}
+                  />
+                  <NumberField
+                    fieldKey="monthsToSteadyState"
+                    label="Months to Reach Steady-State"
+                    unit="months"
+                    scale={1} precision={0} step={3} min={6} max={60}
+                    value={inputs.monthsToSteadyState}
+                    onChange={onChange}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── Deposits, Loans, Retention ────────────────────────────────── */}
+          {FOOTPRINT_SECTIONS.map((section) => (
+            <SectionBlock
+              key={section.id}
+              section={section}
+              inputs={inputs}
+              onChange={onChange}
+            />
+          ))}
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-sm text-zinc-500 hover:text-zinc-700 underline underline-offset-2 transition-colors min-h-[44px] px-2"
+            >
+              Reset to footprint defaults
             </button>
           </div>
         </div>
