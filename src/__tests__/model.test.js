@@ -547,9 +547,13 @@ describe("DEFAULT_FOOTPRINT_INPUTS", () => {
     expect(DEFAULT_FOOTPRINT_INPUTS).toHaveProperty("monthsToSteadyState");
   });
 
-  it("CPA defaults to 0 (no active marketing by default)", () => {
-    expect(DEFAULT_FOOTPRINT_INPUTS.initialCPA).toBe(0);
-    expect(DEFAULT_FOOTPRINT_INPUTS.steadyStateCPA).toBe(0);
+  it("CPA has sensible cross-sell defaults when marketing is enabled ($75 initial, $20 steady-state)", () => {
+    // Marketing OFF: page.jsx memo forces CPA→0 regardless of these values.
+    // Marketing ON:  these are the pre-filled starting points for the CPA fields.
+    // $75 initial ≈ expansion-market steady-state (existing relationship removes brand-building cost).
+    // $20 steady-state ≈ email/app cross-sell at near-marginal cost.
+    expect(DEFAULT_FOOTPRINT_INPUTS.initialCPA).toBe(75);
+    expect(DEFAULT_FOOTPRINT_INPUTS.steadyStateCPA).toBe(20);
   });
 
   it("has higher avgDepositBalance than DEFAULT_INPUTS (established members)", () => {
@@ -632,6 +636,57 @@ describe("runSimulation — blended footprint (Scenario B)", () => {
     blended.months.forEach((m) => {
       expect(m.footprintSamPenetrationPct).toBeGreaterThanOrEqual(0);
       expect(m.footprintSamPenetrationPct).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it("footprint stream with CPA=0 contributes zero acquisition spend to totals", () => {
+    // Verify the no-marketing path at the model layer, not just the UI memo.
+    const zeroCpaFootprint = { ...FOOTPRINT_INPUTS, initialCPA: 0, steadyStateCPA: 0 };
+    const noMarketing = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b", zeroCpaFootprint);
+    // Expansion-only spend = runSimulation with no footprint
+    const expansionOnly = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b");
+    // Each month's acquisition spend in the blended run should equal the expansion-only spend
+    for (let i = 0; i < 60; i++) {
+      expect(noMarketing.months[i].monthlyAcquisitionSpend).toBe(
+        expansionOnly.months[i].monthlyAcquisitionSpend
+      );
+    }
+  });
+
+  it("footprint stream with CPA>0 increases total acquisition spend vs CPA=0", () => {
+    const withMarketing    = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b", {
+      ...FOOTPRINT_INPUTS, initialCPA: 75, steadyStateCPA: 20,
+    });
+    const withoutMarketing = runSimulation(INSTITUTION, TEST_INPUTS, "scenario_b", {
+      ...FOOTPRINT_INPUTS, initialCPA: 0, steadyStateCPA: 0,
+    });
+    const spendWith    = withMarketing.months.reduce((s, m) => s + m.monthlyAcquisitionSpend, 0);
+    const spendWithout = withoutMarketing.months.reduce((s, m) => s + m.monthlyAcquisitionSpend, 0);
+    expect(spendWith).toBeGreaterThan(spendWithout);
+  });
+
+  it("totalActiveMembers equals sum of both streams for all 60 months", () => {
+    // Math.round() on each stream independently can introduce ±1 — allow that tolerance.
+    blended.months.forEach((m) => {
+      const reconstructed = m.totalActiveMembersExpansion + m.totalActiveMembersFootprint;
+      expect(Math.abs(m.totalActiveMembers - reconstructed)).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it("blended months have the same required shape as single-stream months", () => {
+    const REQUIRED_KEYS = [
+      "month", "newMembersGross", "newMembersActive", "totalActiveMembers",
+      "cpa", "monthlyAcquisitionSpend", "cumulativeAcquisitionSpend",
+      "samPenetrationPct", "monthlyRatePremiumCost", "monthlyCannibalizationCost",
+      "depositCannibalizationCost", "loanCannibalizationCost",
+      "monthlyServicingCostSavings", "monthlyGrossNII",
+      "monthlyNetContribution", "cumulativeNetContribution",
+      "cumulativeCannibalDrag", "isBreakEvenMonth",
+    ];
+    blended.months.forEach((m) => {
+      REQUIRED_KEYS.forEach((key) => {
+        expect(m).toHaveProperty(key);
+      });
     });
   });
 });

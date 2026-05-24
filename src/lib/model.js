@@ -65,9 +65,12 @@ export const DEFAULT_FOOTPRINT_INPUTS = {
   m36Target: 2000,
   m60Target: 4000,
 
-  // CPA defaults to 0 — no active marketing; page.jsx enforces 0 when toggle is off
-  initialCPA: 0,
-  steadyStateCPA: 0,
+  // CPA: sensible cross-sell defaults shown when marketing toggle is ON.
+  // page.jsx enforces CPA→0 when the toggle is OFF, regardless of these values.
+  // $75 initial ≈ expansion-market steady-state (existing relationship removes brand-building cost).
+  // $20 steady-state ≈ email/app cross-sell at near-marginal cost after launch push.
+  initialCPA: 75,
+  steadyStateCPA: 20,
   monthsToSteadyState: 24,
 
   // Deposits — established members need less rate incentive
