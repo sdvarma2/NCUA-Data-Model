@@ -8,9 +8,11 @@ export const DEFAULT_INPUTS = {
   samPct: 40,                      // SAM as % of TAM
 
   // Acquisition — Membership Milestones (net active members)
-  m12Target: 3000,    // Target active members at month 12
-  m36Target: 12000,   // Target active members at month 36
-  m60Target: 22000,   // Target active members at month 60
+  // Pre-computed from suggestMilestones(DEFAULT_INPUTS, p=0.008, q=0.30):
+  // SAM 200,000 × mid-green Bass params × 18%/7% attrition → 1,500 / 7,000 / 15,000
+  m12Target: 1500,
+  m36Target: 7000,
+  m60Target: 15000,
 
   // Acquisition — CPA Economics (logistic decay curve)
   initialCPA: 450,           // $/active member, early market; Cornerstone: new-market CU CAC $200–400; expansion at/above top of range
@@ -61,9 +63,11 @@ export const DEFAULT_FOOTPRINT_INPUTS = {
   marketName: "Existing Branch Footprint",
   tam: 150000,       // bounded by existing service-area geography
   samPct: 35,        // existing member + near-member universe; slightly lower than cold market
-  m12Target: 500,    // organic/cross-sell adoption is slower than a marketed launch
-  m36Target: 2000,
-  m60Target: 4000,
+  // Pre-computed from suggestMilestones(DEFAULT_FOOTPRINT_INPUTS, p=0.008, q=0.30):
+  // SAM 52,500 × mid-green Bass params × 10%/5% attrition → 500 / 1,900 / 4,100
+  m12Target: 500,
+  m36Target: 1900,
+  m60Target: 4100,
 
   // CPA: sensible cross-sell defaults shown when marketing toggle is ON.
   // page.jsx enforces CPA→0 when the toggle is OFF, regardless of these values.
@@ -374,6 +378,39 @@ export function computeCannibalCost(institution, inputs, scenario) {
  */
 export function computeNIIContribution(totalDigitalMembers, inputs, institution) {
   return totalDigitalMembers * inputs.avgDepositBalance * (institution.hybrid_nim_p50 / 100) / 12;
+}
+
+/**
+ * Suggests milestone targets using a reference Bass run at fixed parameters.
+ * Runs computeBassCurve → simulateNetActiveAll with the inputs' own attrition
+ * settings so the suggested values reflect net active members, not gross
+ * adoption. Results are rounded to a scale-appropriate increment so they read
+ * as plausible planning numbers rather than raw simulation output.
+ *
+ * Reference parameters p = 0.008, q = 0.30 represent a realistic mid-green
+ * digital financial product: moderate paid/owned awareness pull (p) and
+ * moderate credit-union-community word-of-mouth (q). These sit comfortably
+ * within the realism-indicator green zone for both dimensions.
+ *
+ * @param {object} inputs   Merged inputs — uses tam, samPct, digitalAttrition*
+ * @param {number} [p=0.008]  Reference innovation coefficient
+ * @param {number} [q=0.30]   Reference imitation coefficient
+ * @returns {{ m12Target: number, m36Target: number, m60Target: number }}
+ */
+export function suggestMilestones(inputs, p = 0.008, q = 0.30) {
+  const sam = inputs.tam * (inputs.samPct / 100);
+  const bassGrossCurve = computeBassCurve(p, q, sam);
+  const { a12, a36, a60 } = simulateNetActiveAll(bassGrossCurve, inputs);
+
+  // Round to a scale-appropriate increment so numbers look like plans, not outputs.
+  const roundTo = sam > 100000 ? 500 : sam > 25000 ? 100 : sam > 5000 ? 50 : 10;
+  const round = (n) => Math.max(roundTo, Math.round(n / roundTo) * roundTo);
+
+  return {
+    m12Target: round(a12),
+    m36Target: round(a36),
+    m60Target: round(a60),
+  };
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, MARKET_COMPETITIVENESS_PRESETS } from "@/lib/model";
+import { DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, MARKET_COMPETITIVENESS_PRESETS, suggestMilestones } from "@/lib/model";
 
 // ── Info tooltip ─────────────────────────────────────────────────────────────
 
@@ -41,6 +41,102 @@ function InfoTip({ children, className = "w-64" }) {
         </span>
       )}
     </span>
+  );
+}
+
+// ── Suggest Milestones Modal ──────────────────────────────────────────────────
+
+/**
+ * Confirmation modal shown before applying suggested milestone values.
+ * Renders as a fixed overlay so it sits above all panel content regardless of
+ * scroll position. Clicking the backdrop dismisses without applying.
+ */
+function SuggestMilestonesModal({ current, suggested, onApply, onCancel }) {
+  const rows = [
+    { label: "Month 12",  currentVal: current.m12Target,  suggestedVal: suggested.m12Target  },
+    { label: "Month 36",  currentVal: current.m36Target,  suggestedVal: suggested.m36Target  },
+    { label: "Month 60",  currentVal: current.m60Target,  suggestedVal: suggested.m60Target  },
+  ];
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onCancel}
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby="suggest-modal-title"
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-sm"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5">
+          <h2 id="suggest-modal-title" className="text-base font-semibold text-zinc-900 mb-1">
+            Suggested Targets
+          </h2>
+          <p className="text-sm text-zinc-500 mb-4 leading-snug">
+            Based on Bass parameters p&nbsp;=&nbsp;0.008, q&nbsp;=&nbsp;0.30 applied to your
+            current SAM and attrition settings.
+          </p>
+
+          {/* Comparison table */}
+          <div className="rounded-lg border border-zinc-200 overflow-hidden mb-5">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-200">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Milestone
+                  </th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Current
+                  </th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-zinc-900 uppercase tracking-wide">
+                    Suggested
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {rows.map(({ label, currentVal, suggestedVal }) => {
+                  const changed = suggestedVal !== currentVal;
+                  return (
+                    <tr key={label}>
+                      <td className="py-2.5 px-3 text-zinc-600">{label}</td>
+                      <td className="py-2.5 px-3 text-right text-zinc-400">
+                        {currentVal.toLocaleString()}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-medium ${changed ? "text-zinc-900" : "text-zinc-400"}`}>
+                        {suggestedVal.toLocaleString()}
+                        {changed && (
+                          <span className={`ml-1.5 text-xs ${suggestedVal > currentVal ? "text-emerald-700" : "text-amber-700"}`}>
+                            {suggestedVal > currentVal ? "▲" : "▼"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 py-2.5 px-4 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors min-h-[44px]"
+            >
+              Keep current
+            </button>
+            <button
+              type="button"
+              onClick={onApply}
+              className="flex-1 py-2.5 px-4 text-sm font-medium text-white bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors min-h-[44px]"
+            >
+              Apply suggestions
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -144,11 +240,13 @@ const MC_OPTIONS = [
 
 function AcquisitionSection({ inputs, onChange, onBatchChange }) {
   const sam = Math.round(inputs.tam * (inputs.samPct / 100));
+  const [suggestModal, setSuggestModal] = useState(null);
 
   // Determine active Market Competitiveness position by matching initialCPA exactly
   const activeMC = MC_OPTIONS.find((o) => o.preset.initialCPA === inputs.initialCPA)?.label ?? null;
 
   return (
+    <>
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 mb-1 pt-4">
         Acquisition
@@ -219,6 +317,20 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           value={inputs.m60Target}
           onChange={onChange}
         />
+
+        {/* Suggest from SAM button */}
+        <div className="py-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setSuggestModal(suggestMilestones(inputs))}
+            className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors flex items-center gap-1.5 min-h-[44px] px-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+              <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.83-4.401Z" clipRule="evenodd" />
+            </svg>
+            Suggest from SAM
+          </button>
+        </div>
 
         {/* ── Acquisition Economics ──────────────────────────────── */}
         <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
@@ -308,6 +420,16 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
 
       </div>
     </div>
+
+    {suggestModal && (
+      <SuggestMilestonesModal
+        current={{ m12Target: inputs.m12Target, m36Target: inputs.m36Target, m60Target: inputs.m60Target }}
+        suggested={suggestModal}
+        onApply={() => { onBatchChange(suggestModal); setSuggestModal(null); }}
+        onCancel={() => setSuggestModal(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -612,6 +734,7 @@ export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
  */
 export function FootprintSettings({ inputs, marketing, onMarketingChange, onChange }) {
   const [open, setOpen] = useState(false);
+  const [suggestModal, setSuggestModal] = useState(null);
   const sam = Math.round(inputs.tam * (inputs.samPct / 100));
 
   function handleReset() {
@@ -739,6 +862,20 @@ export function FootprintSettings({ inputs, marketing, onMarketingChange, onChan
                 onChange={onChange}
               />
 
+              {/* Suggest from SAM button */}
+              <div className="py-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSuggestModal(suggestMilestones(inputs))}
+                  className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors flex items-center gap-1.5 min-h-[44px] px-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+                    <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.83-4.401Z" clipRule="evenodd" />
+                  </svg>
+                  Suggest from SAM
+                </button>
+              </div>
+
               {marketing && (
                 <>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
@@ -793,6 +930,20 @@ export function FootprintSettings({ inputs, marketing, onMarketingChange, onChan
             </button>
           </div>
         </div>
+      )}
+
+      {suggestModal && (
+        <SuggestMilestonesModal
+          current={{ m12Target: inputs.m12Target, m36Target: inputs.m36Target, m60Target: inputs.m60Target }}
+          suggested={suggestModal}
+          onApply={() => {
+            onChange("m12Target", suggestModal.m12Target);
+            onChange("m36Target", suggestModal.m36Target);
+            onChange("m60Target", suggestModal.m60Target);
+            setSuggestModal(null);
+          }}
+          onCancel={() => setSuggestModal(null)}
+        />
       )}
     </div>
   );

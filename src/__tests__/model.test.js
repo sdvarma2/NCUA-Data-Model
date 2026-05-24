@@ -10,6 +10,7 @@ import {
   computeNIIContribution,
   findBreakEven,
   runSimulation,
+  suggestMilestones,
 } from "@/lib/model";
 
 // Minimal institution fixture — 1B in assets for easy math
@@ -43,9 +44,10 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.marketName).toBe("Expansion Market");
     expect(DEFAULT_INPUTS.tam).toBe(500000);
     expect(DEFAULT_INPUTS.samPct).toBe(40);
-    expect(DEFAULT_INPUTS.m12Target).toBe(3000);
-    expect(DEFAULT_INPUTS.m36Target).toBe(12000);
-    expect(DEFAULT_INPUTS.m60Target).toBe(22000);
+    // Pre-computed from suggestMilestones(DEFAULT_INPUTS, p=0.008, q=0.30)
+    expect(DEFAULT_INPUTS.m12Target).toBe(1500);
+    expect(DEFAULT_INPUTS.m36Target).toBe(7000);
+    expect(DEFAULT_INPUTS.m60Target).toBe(15000);
     expect(DEFAULT_INPUTS.initialCPA).toBe(450);
     expect(DEFAULT_INPUTS.steadyStateCPA).toBe(75);
     expect(DEFAULT_INPUTS.monthsToSteadyState).toBe(24);
@@ -576,6 +578,83 @@ describe("DEFAULT_FOOTPRINT_INPUTS", () => {
   it("has conservative membership milestones (organic/cross-sell adoption is slower)", () => {
     expect(DEFAULT_FOOTPRINT_INPUTS.m12Target).toBeLessThan(DEFAULT_INPUTS.m12Target);
     expect(DEFAULT_FOOTPRINT_INPUTS.m60Target).toBeLessThan(DEFAULT_INPUTS.m60Target);
+  });
+});
+
+// ─── suggestMilestones ────────────────────────────────────────────────────────
+
+describe("suggestMilestones", () => {
+  it("returns all three milestone keys", () => {
+    const result = suggestMilestones(TEST_INPUTS);
+    expect(result).toHaveProperty("m12Target");
+    expect(result).toHaveProperty("m36Target");
+    expect(result).toHaveProperty("m60Target");
+  });
+
+  it("milestones are strictly increasing (m12 < m36 < m60)", () => {
+    const { m12Target, m36Target, m60Target } = suggestMilestones(TEST_INPUTS);
+    expect(m12Target).toBeGreaterThan(0);
+    expect(m36Target).toBeGreaterThan(m12Target);
+    expect(m60Target).toBeGreaterThan(m36Target);
+  });
+
+  it("milestones are all positive integers", () => {
+    const { m12Target, m36Target, m60Target } = suggestMilestones(TEST_INPUTS);
+    expect(Number.isInteger(m12Target)).toBe(true);
+    expect(Number.isInteger(m36Target)).toBe(true);
+    expect(Number.isInteger(m60Target)).toBe(true);
+    expect(m12Target).toBeGreaterThan(0);
+  });
+
+  it("all milestones are well below SAM (< 40% penetration with reference p/q)", () => {
+    const sam = TEST_INPUTS.tam * (TEST_INPUTS.samPct / 100); // 20,000
+    const { m12Target, m36Target, m60Target } = suggestMilestones(TEST_INPUTS);
+    expect(m12Target).toBeLessThan(sam * 0.40);
+    expect(m36Target).toBeLessThan(sam * 0.40);
+    expect(m60Target).toBeLessThan(sam * 0.40);
+  });
+
+  it("scales with SAM — doubling TAM roughly doubles all three milestones", () => {
+    const double = { ...TEST_INPUTS, tam: TEST_INPUTS.tam * 2 };
+    const base   = suggestMilestones(TEST_INPUTS);
+    const big    = suggestMilestones(double);
+    // Allow ±30% around 2× due to rounding increments on different SAM tiers
+    expect(big.m12Target / base.m12Target).toBeGreaterThan(1.4);
+    expect(big.m12Target / base.m12Target).toBeLessThan(2.6);
+    expect(big.m60Target / base.m60Target).toBeGreaterThan(1.4);
+    expect(big.m60Target / base.m60Target).toBeLessThan(2.6);
+  });
+
+  it("higher attrition produces lower milestones", () => {
+    const lowAttrition  = { ...TEST_INPUTS, digitalAttritionYear1: 0.05, digitalAttritionSteadyState: 0.03 };
+    const highAttrition = { ...TEST_INPUTS, digitalAttritionYear1: 0.30, digitalAttritionSteadyState: 0.15 };
+    const low  = suggestMilestones(lowAttrition);
+    const high = suggestMilestones(highAttrition);
+    expect(low.m12Target).toBeGreaterThan(high.m12Target);
+    expect(low.m60Target).toBeGreaterThan(high.m60Target);
+  });
+
+  it("higher reference q (word-of-mouth) produces higher milestones", () => {
+    const slow = suggestMilestones(TEST_INPUTS, 0.008, 0.15);
+    const fast = suggestMilestones(TEST_INPUTS, 0.008, 0.50);
+    expect(fast.m60Target).toBeGreaterThan(slow.m60Target);
+  });
+
+  it("results are rounded to a scale-appropriate increment (no odd single-digit remainders)", () => {
+    // SAM = 20,000 (> 5,000, ≤ 25,000) → round to 50
+    const sam = TEST_INPUTS.tam * (TEST_INPUTS.samPct / 100);
+    expect(sam).toBeGreaterThan(5000);
+    expect(sam).toBeLessThanOrEqual(25000);
+    const { m12Target, m36Target, m60Target } = suggestMilestones(TEST_INPUTS);
+    expect(m12Target % 50).toBe(0);
+    expect(m36Target % 50).toBe(0);
+    expect(m60Target % 50).toBe(0);
+  });
+
+  it("does not mutate inputs", () => {
+    const before = { ...TEST_INPUTS };
+    suggestMilestones(TEST_INPUTS);
+    expect(TEST_INPUTS).toEqual(before);
   });
 });
 
