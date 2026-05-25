@@ -7,6 +7,7 @@ import ScenarioToggle from "@/components/ScenarioToggle";
 import ModelInputs from "@/components/ModelInputs";
 import AdvancedSettings, { FootprintSettings } from "@/components/AdvancedSettings";
 import ModelHealthPanel from "@/components/ModelHealthPanel";
+import SimulationTable from "@/components/SimulationTable";
 import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS } from "@/lib/model";
 import { resolveInputs } from "@/lib/levers";
 
@@ -82,8 +83,6 @@ export default function Home() {
     [selected, inputs, footprintInputs]
   );
 
-  const activeSimulation = scenario === "scenario_a" ? simulationA : simulationB;
-
   const loading = institutionCount === null && !error;
 
   return (
@@ -146,29 +145,13 @@ export default function Home() {
                 institution={selected}
               />
 
-              {/* Temporary readout — will be replaced by simulation UI in Steps 8–13 */}
-              {activeSimulation && (
-                <section className="rounded-lg border border-zinc-200 bg-white p-5 text-sm text-zinc-600 space-y-1">
-                  <p className="font-semibold text-zinc-800 mb-2">
-                    Simulation preview ({scenario === "scenario_a" ? "Expansion Markets Only" : "All Markets"})
-                  </p>
-                  <p>Month 60 active members: <span className="font-medium text-zinc-900">{activeSimulation.months[59].totalActiveMembers.toLocaleString()}</span></p>
-                  <p>Month 60 cumulative net: <span className={`font-medium ${activeSimulation.months[59].cumulativeNetContribution >= 0 ? "text-emerald-700" : "text-red-600"}`}>${activeSimulation.months[59].cumulativeNetContribution.toLocaleString()}</span></p>
-                  <p>Break-even month: <span className="font-medium text-zinc-900">{activeSimulation.months.find(m => m.isBreakEvenMonth)?.month ?? "Not reached within 5 years"}</span></p>
-                  <p className="pt-1 text-zinc-500">
-                    Bass fit: p = {activeSimulation.calibration.p.toFixed(4)}, q = {activeSimulation.calibration.q.toFixed(3)}
-                    {" · "}
-                    <span className={
-                      activeSimulation.calibration.realismIndicator.overall === "green"  ? "text-emerald-700" :
-                      activeSimulation.calibration.realismIndicator.overall === "yellow" ? "text-amber-700"   :
-                      "text-red-600"
-                    }>
-                      {activeSimulation.calibration.realismIndicator.overall === "green"  ? "✓ Plausible"  :
-                       activeSimulation.calibration.realismIndicator.overall === "yellow" ? "⚠ Ambitious"  :
-                       "✗ Implausible"}
-                    </span>
-                  </p>
-                </section>
+              {/* Step 11: Tabular simulation detail */}
+              {(simulationA || simulationB) && (
+                <SimulationTable
+                  simulationA={simulationA}
+                  simulationB={simulationB}
+                  scenario={scenario}
+                />
               )}
             </>
           )}

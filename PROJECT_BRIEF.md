@@ -634,7 +634,7 @@ After running a simulation, a "Compare Scenarios" button runs the other scenario
 
 The outputs from Phase 1 are hard to trust or interpret without seeing the inputs that produced them. This phase builds full input visibility before the animation is layered on top. **Do not proceed to Phase 3 until these steps are complete and the model outputs pass the sanity checks in Step 13.**
 
-**9. Advanced Settings panel — full input exposure**
+**9. ✅ Advanced Settings panel — full input exposure**
 
 Build `AdvancedSettings.jsx` as an expandable section below the strategy levers. When expanded, it shows every `DEFAULT_INPUTS` value as an editable numeric field, grouped into five sections: Acquisition, Deposits, Loans, Servicing Cost, and Retention.
 
@@ -643,7 +643,7 @@ Build `AdvancedSettings.jsx` as an expandable section below the strategy levers.
 - All fields accept numeric input; enforce reasonable min/max bounds without hard errors.
 - Inputs wire back into `resolveInputs()` — the simulation recalculates live as the user types.
 
-**10. Derived values display — "live math" panel**
+**10. ✅ Derived values display — "live math" panel**
 
 Inside Advanced Settings (or immediately below the lever section), add a small "Model Health" panel showing the six derived values from the Input Interplay table above, computed from the current inputs:
 
@@ -656,7 +656,7 @@ Inside Advanced Settings (or immediately below the lever section), add a small "
 
 These are the "instrument panel" — they let the user see whether their inputs produce a plausible model before running the simulation. Color-code them: green if in expected range, amber if borderline, red if implausible.
 
-**11. Tabular simulation detail**
+**11. ✅ Tabular simulation detail**
 
 Replace the current "simulation preview" section with a compact table showing key fields at months 1, 6, 12, 24, 36, and 60:
 
