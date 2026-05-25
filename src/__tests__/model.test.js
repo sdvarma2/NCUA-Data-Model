@@ -8,6 +8,7 @@ import {
   computeRatePremiumCost,
   computeCannibalCost,
   computeNIIContribution,
+  computeModelHealth,
   findBreakEven,
   runSimulation,
   suggestMilestones,
@@ -389,6 +390,98 @@ describe("computeNIIContribution", () => {
     const nii = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION);
     expect(nii).toBeGreaterThan(25000);
     expect(nii).toBeLessThan(65000);
+  });
+});
+
+// ─── computeModelHealth ──────────────────────────────────────────────────────
+
+describe("computeModelHealth", () => {
+  // Extend INSTITUTION fixture with nim_pct (2.5%) for % of NII calculations
+  const INST = { ...INSTITUTION, nim_pct: 2.5 };
+
+  it("returns all required keys", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h).toHaveProperty("servicingSavingsPerMemberYr");
+    expect(h).toHaveProperty("ratePremiumPerMemberYr");
+    expect(h).toHaveProperty("monthlyNIIper1000");
+    expect(h).toHaveProperty("monthlyRatePremiumPer1000");
+    expect(h).toHaveProperty("niiCoverageRatio");
+    expect(h).toHaveProperty("annualCannibDragScenarioB");
+    expect(h).toHaveProperty("cannibDragAsPctOfNII");
+  });
+
+  it("servicing savings match the model brief formula at defaults (~$103/yr)", () => {
+    // 250 − 95 + (1/3 × 12 × $4.50) − $35 − $15 − (4 × $5) = $103
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.servicingSavingsPerMemberYr).toBeCloseTo(103, 0);
+  });
+
+  it("servicing savings decrease when digital costs rise", () => {
+    const higher = computeModelHealth({ ...DEFAULT_INPUTS, platformCost: 100 }, INST);
+    const base   = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(higher.servicingSavingsPerMemberYr).toBeLessThan(base.servicingSavingsPerMemberYr);
+  });
+
+  it("servicing savings increase when more free branch visits are included", () => {
+    // More visits → higher subsidy → lower net savings
+    const more = computeModelHealth({ ...DEFAULT_INPUTS, freeVisits: 8 }, INST);
+    const base = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(more.servicingSavingsPerMemberYr).toBeLessThan(base.servicingSavingsPerMemberYr);
+  });
+
+  it("monthly rate premium equals annual premium × 1000 ÷ 12", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.monthlyRatePremiumPer1000).toBeCloseTo(h.ratePremiumPerMemberYr * 1000 / 12, 2);
+  });
+
+  it("monthly NII per 1,000 matches computeNIIContribution at 1,000 members", () => {
+    const h      = computeModelHealth(DEFAULT_INPUTS, INST);
+    const direct = computeNIIContribution(1000, DEFAULT_INPUTS, INST);
+    expect(h.monthlyNIIper1000).toBeCloseTo(direct, 0);
+  });
+
+  it("NII coverage ratio equals monthlyNII / monthlyRatePremium", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.niiCoverageRatio).toBeCloseTo(
+      h.monthlyNIIper1000 / h.monthlyRatePremiumPer1000, 5
+    );
+  });
+
+  it("NII coverage ratio is null when both rate premium fields are zero", () => {
+    const h = computeModelHealth({ ...DEFAULT_INPUTS, rateBump: 0, rateCut: 0 }, INST);
+    expect(h.niiCoverageRatio).toBeNull();
+  });
+
+  it("NII coverage is well above 3× at defaults (NII dwarfs rate premium)", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.niiCoverageRatio).toBeGreaterThan(3);
+  });
+
+  it("annual cannibalization drag scales linearly with institution asset size", () => {
+    const small = computeModelHealth(DEFAULT_INPUTS, { ...INST, assets_b: 1 });
+    const large = computeModelHealth(DEFAULT_INPUTS, { ...INST, assets_b: 4 });
+    expect(large.annualCannibDragScenarioB).toBeCloseTo(
+      small.annualCannibDragScenarioB * 4, 0
+    );
+  });
+
+  it("cannibDragAsPctOfNII is null when nim_pct is missing from institution", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INSTITUTION); // no nim_pct
+    expect(h.cannibDragAsPctOfNII).toBeNull();
+  });
+
+  it("cannibDragAsPctOfNII is positive when nim_pct is present", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.cannibDragAsPctOfNII).toBeGreaterThan(0);
+    expect(h.cannibDragAsPctOfNII).toBeLessThan(1); // less than 100% of NII
+  });
+
+  it("does not mutate inputs or institution", () => {
+    const inputsBefore = { ...DEFAULT_INPUTS };
+    const instBefore   = { ...INST };
+    computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(DEFAULT_INPUTS).toEqual(inputsBefore);
+    expect(INST).toEqual(instBefore);
   });
 });
 

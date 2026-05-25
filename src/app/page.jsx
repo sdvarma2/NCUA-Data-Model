@@ -6,6 +6,7 @@ import InstitutionProfileCard from "@/components/InstitutionProfileCard";
 import ScenarioToggle from "@/components/ScenarioToggle";
 import ModelInputs from "@/components/ModelInputs";
 import AdvancedSettings, { FootprintSettings } from "@/components/AdvancedSettings";
+import ModelHealthPanel from "@/components/ModelHealthPanel";
 import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS } from "@/lib/model";
 import { resolveInputs } from "@/lib/levers";
 
@@ -136,6 +137,9 @@ export default function Home() {
                   />
                 )}
               </section>
+
+              {/* Step 10: Model Health instrument panel */}
+              <ModelHealthPanel inputs={inputs} institution={selected} />
 
               {/* Temporary readout — will be replaced by simulation UI in Steps 8–13 */}
               {activeSimulation && (

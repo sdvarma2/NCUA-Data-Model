@@ -414,6 +414,93 @@ export function suggestMilestones(inputs, p = 0.008, q = 0.30) {
 }
 
 /**
+ * Computes the six "Model Health" instrument values — derived from current
+ * inputs and the selected institution. Used by ModelHealthPanel to let the
+ * user verify inputs are producing a plausible model before running the
+ * simulation.
+ *
+ * All values are returned as raw numbers (not formatted). Callers are
+ * responsible for display formatting and color-coding thresholds.
+ *
+ * @param {object} inputs       Merged DEFAULT_INPUTS + user overrides
+ * @param {object} institution  Selected institution from ncua_model_data.json
+ * @returns {{
+ *   servicingSavingsPerMemberYr: number,   // $/member/yr — target $90–150
+ *   ratePremiumPerMemberYr: number,        // $/member/yr — reference value
+ *   monthlyNIIper1000: number,             // $/mo at 1,000 members
+ *   monthlyRatePremiumPer1000: number,     // $/mo at 1,000 members
+ *   niiCoverageRatio: number|null,         // null when rate premium is zero
+ *   annualCannibDragScenarioB: number,     // $/yr institution-level Scenario B drag
+ *   cannibDragAsPctOfNII: number|null,     // null when institution nim_pct missing
+ * }}
+ */
+export function computeModelHealth(inputs, institution) {
+  // 1. Effective servicing savings per member per year.
+  //    Formula from PROJECT_BRIEF §Servicing Cost:
+  //    savings = maintenanceTrad − maintenanceDigital
+  //              + tellerTxns/yr × transactionCostTrad
+  //              − platformCost − fraudCost − branchVisitSubsidy
+  //    At defaults: 250 − 95 + (4 × $4.50) − $35 − $15 − $20 = $103/yr
+  const branchVisitSubsidy = inputs.freeVisits * inputs.costPerBranchVisit;
+  const servicingSavingsPerMemberYr =
+    inputs.maintenanceTrad - inputs.maintenanceDigital
+    + inputs.avgTellerTransactionsPerMonth * 12 * inputs.transactionCostTrad
+    - inputs.platformCost
+    - inputs.fraudCost
+    - branchVisitSubsidy;
+
+  // 2. Rate premium cost per member per year (deposit rate bump + loan rate cut).
+  const ratePremiumPerMemberYr =
+    inputs.avgDepositBalance * (inputs.rateBump / 10000)
+    + inputs.avgLoanBalance * inputs.loanPenetrationRate * (inputs.rateCut / 10000);
+
+  // 3. Monthly gross NII per 1,000 digital members.
+  //    Uses hybrid_nim_p50 — same proxy as computeNIIContribution.
+  const monthlyNIIper1000 =
+    1000 * inputs.avgDepositBalance * (institution.hybrid_nim_p50 / 100) / 12;
+
+  // 4. Monthly rate premium cost per 1,000 digital members (annualised ÷ 12).
+  const monthlyRatePremiumPer1000 = ratePremiumPerMemberYr * 1000 / 12;
+
+  // 5. NII coverage ratio: how many times does NII cover the rate premium?
+  //    Null when rate premium is zero (infinite coverage — not useful to display).
+  //    Target > 3×; below 1.5× is a red flag.
+  const niiCoverageRatio =
+    monthlyRatePremiumPer1000 > 0
+      ? monthlyNIIper1000 / monthlyRatePremiumPer1000
+      : null;
+
+  // 6. Annual cannibalization drag — Scenario B.
+  //    Mirrors computeCannibalCost × 12 (annual, not monthly).
+  //    Also expressed as a fraction of the institution's current annual NII.
+  const existingShares = institution.assets_b * 1e9 * 0.85;
+  const existingLoans  = institution.assets_b * 1e9 * 0.65;
+  const annualCannibDragScenarioB =
+    existingShares * inputs.depositCannibRateB * (inputs.rateBump / 10000)
+    + existingLoans  * inputs.loanCannibRateB   * (inputs.rateCut  / 10000);
+
+  const institutionAnnualNII =
+    institution.nim_pct != null
+      ? institution.assets_b * 1e9 * (institution.nim_pct / 100)
+      : null;
+
+  const cannibDragAsPctOfNII =
+    institutionAnnualNII != null && institutionAnnualNII > 0
+      ? annualCannibDragScenarioB / institutionAnnualNII
+      : null;
+
+  return {
+    servicingSavingsPerMemberYr,
+    ratePremiumPerMemberYr,
+    monthlyNIIper1000,
+    monthlyRatePremiumPer1000,
+    niiCoverageRatio,
+    annualCannibDragScenarioB,
+    cannibDragAsPctOfNII,
+  };
+}
+
+/**
  * Returns the first month number where cumulativeNetContribution >= 0, or null.
  */
 export function findBreakEven(months) {
