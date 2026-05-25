@@ -84,34 +84,58 @@ function InfoTooltip({ children }) {
   );
 }
 
-function CalibrationLine({ label, cal, showTooltip = false }) {
+// ── Tooltip content blocks ────────────────────────────────────────────────────
+
+const BASS_FIT_TOOLTIP = (
+  <>
+    <span className="block font-semibold text-white mb-1.5">Bass Curve Calibration</span>
+    <span className="block mb-2">
+      A Bass Curve models how a new product spreads through a market by separating adoption into two forces.
+    </span>
+    <span className="block mb-1">
+      <span className="font-semibold text-zinc-200">p — Innovation coefficient</span>
+      {" "}(green: 0.003–0.020): the fraction of the market that adopts independently each period, driven by advertising and awareness.
+    </span>
+    <span className="block mb-2">
+      <span className="font-semibold text-zinc-200">q — Imitation coefficient</span>
+      {" "}(green: 0.15–0.45): the rate at which existing members influence non-adopters through word-of-mouth and social proof.
+    </span>
+    <span className="block text-zinc-300 border-t border-zinc-600 pt-2 mt-1">
+      <span className="font-semibold text-white">Plausibility</span> is assessed on three dimensions: p and q within published ranges; Bass curve fits all milestones within ~10% error; no single target under-predicted by more than 10%.{" "}
+      <span className="text-emerald-400">✓ Plausible</span> = all green.{" "}
+      <span className="text-amber-400">⚠ Ambitious</span> = one or more targets may be hard to reach.{" "}
+      <span className="text-red-400">✗ Implausible</span> = parameters outside realistic ranges.
+    </span>
+  </>
+);
+
+const FOOTPRINT_TOOLTIP = (
+  <>
+    <span className="block font-semibold text-white mb-1.5">Inside-Footprint vs. Expansion</span>
+    <span className="block mb-2">
+      In the All Markets scenario, adoption is modeled as two independent streams with different economics.
+    </span>
+    <span className="block mb-1">
+      <span className="font-semibold text-zinc-200">Expansion</span> targets households outside the credit union's current membership — net-new relationships in markets where the institution has no prior presence. Acquisition costs are higher and early attrition is greater because no existing trust has been established.
+    </span>
+    <span className="block mb-2">
+      <span className="font-semibold text-zinc-200">Footprint (this line)</span> targets the credit union's existing members — converting them to the digital-only product. The relationship already exists, so acquisition costs are substantially lower (cross-sell vs. new-market advertising) and attrition is reduced.
+    </span>
+    <span className="block text-zinc-300 border-t border-zinc-600 pt-2 mt-1">
+      Each stream runs its own Bass Curve calibration against separate milestone targets. The p and q shown here reflect adoption dynamics within a known, trusting audience — expect lower p (less cold outreach needed) and similar q (word-of-mouth still drives imitation within the existing base).
+    </span>
+  </>
+);
+
+// ── CalibrationLine ───────────────────────────────────────────────────────────
+
+function CalibrationLine({ label, cal, tooltip }) {
   if (!cal) return null;
   return (
     <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
       <span className="inline-flex items-center gap-0">
         {label}
-        {showTooltip && (
-          <InfoTooltip>
-            <span className="block font-semibold text-white mb-1.5">Bass Curve Calibration</span>
-            <span className="block mb-2">
-              A Bass Curve models how a new product spreads through a market by separating adoption into two forces.
-            </span>
-            <span className="block mb-1">
-              <span className="font-semibold text-zinc-200">p — Innovation coefficient</span>
-              {" "}(green: 0.003–0.020): the fraction of the market that adopts independently each period, driven by advertising and awareness.
-            </span>
-            <span className="block mb-2">
-              <span className="font-semibold text-zinc-200">q — Imitation coefficient</span>
-              {" "}(green: 0.15–0.45): the rate at which existing members influence non-adopters through word-of-mouth and social proof.
-            </span>
-            <span className="block text-zinc-300 border-t border-zinc-600 pt-2 mt-1">
-              <span className="font-semibold text-white">Plausibility</span> is assessed on three dimensions: p and q within published ranges; Bass curve fits all milestones within ~10% error; no single target under-predicted by more than 10%.{" "}
-              <span className="text-emerald-400">✓ Plausible</span> = all green.{" "}
-              <span className="text-amber-400">⚠ Ambitious</span> = one or more targets may be hard to reach.{" "}
-              <span className="text-red-400">✗ Implausible</span> = parameters outside realistic ranges.
-            </span>
-          </InfoTooltip>
-        )}
+        {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
       </span>
       {": "}p = {cal.p.toFixed(4)}, q = {cal.q.toFixed(3)}
       {" · "}
@@ -154,10 +178,14 @@ export default function SimulationTable({ simulationA, simulationB, scenario }) 
           <CalibrationLine
             label={footprintCalibration ? "Expansion" : "Bass Fit"}
             cal={calibration}
-            showTooltip
+            tooltip={BASS_FIT_TOOLTIP}
           />
           {footprintCalibration && (
-            <CalibrationLine label="Footprint" cal={footprintCalibration} />
+            <CalibrationLine
+              label="Footprint"
+              cal={footprintCalibration}
+              tooltip={FOOTPRINT_TOOLTIP}
+            />
           )}
           <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
             Break-even:{" "}
