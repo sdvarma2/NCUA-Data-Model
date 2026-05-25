@@ -9,9 +9,9 @@ export const DEFAULT_INPUTS = {
 
   // Acquisition — Membership Milestones (net active members)
   // Pre-computed from suggestMilestones(DEFAULT_INPUTS, p=0.008, q=0.30):
-  // SAM 200,000 × mid-green Bass params × 18%/7% attrition → 1,500 / 7,000 / 15,000
-  m12Target: 1500,
-  m36Target: 7000,
+  // SAM 200,000 × mid-green Bass params × 18%/7% attrition → 1,700 / 6,900 / 15,000
+  m12Target: 1700,
+  m36Target: 6900,
   m60Target: 15000,
 
   // Acquisition — CPA Economics (logistic decay curve)
@@ -64,9 +64,9 @@ export const DEFAULT_FOOTPRINT_INPUTS = {
   tam: 150000,       // bounded by existing service-area geography
   samPct: 35,        // existing member + near-member universe; slightly lower than cold market
   // Pre-computed from suggestMilestones(DEFAULT_FOOTPRINT_INPUTS, p=0.008, q=0.30):
-  // SAM 52,500 × mid-green Bass params × 10%/5% attrition → 500 / 1,900 / 4,100
-  m12Target: 500,
-  m36Target: 1900,
+  // SAM 52,500 × mid-green Bass params × 10%/5% attrition → 450 / 1,850 / 4,100
+  m12Target: 450,
+  m36Target: 1850,
   m60Target: 4100,
 
   // CPA: sensible cross-sell defaults shown when marketing toggle is ON.
@@ -240,12 +240,16 @@ function assessRealism(p, q, residuals) {
   const rmse = Math.sqrt((r12 * r12 + r36 * r36 + r60 * r60) / 3);
   const fitStatus = rmse < 0.10 ? "green" : rmse < 0.25 ? "yellow" : "red";
 
-  // Milestone tension: which single milestone is hardest for the Bass curve to hit?
-  const absRes = { 12: Math.abs(r12), 36: Math.abs(r36), 60: Math.abs(r60) };
+  // Milestone tension: how hard is it for the Bass curve to reach the targets?
+  // Only NEGATIVE residuals (model under-predicts) count as tension — a positive
+  // residual means the Bass curve naturally exceeds the target, which indicates
+  // the target is conservative, not ambitious. Labelling over-achievable targets
+  // as "Ambitious" is a false positive that confuses the calibration story.
+  const underPredictions = { 12: Math.max(0, -r12), 36: Math.max(0, -r36), 60: Math.max(0, -r60) };
   const maxResidualMonth = parseInt(
-    Object.entries(absRes).reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
+    Object.entries(underPredictions).reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
   );
-  const maxResidual = absRes[maxResidualMonth];
+  const maxResidual = underPredictions[maxResidualMonth];
   const tensionStatus = maxResidual < 0.10 ? "green" : maxResidual < 0.25 ? "yellow" : "red";
 
   const overall =
@@ -402,14 +406,21 @@ export function suggestMilestones(inputs, p = 0.008, q = 0.30) {
   const bassGrossCurve = computeBassCurve(p, q, sam);
   const { a12, a36, a60 } = simulateNetActiveAll(bassGrossCurve, inputs);
 
-  // Round to a scale-appropriate increment so numbers look like plans, not outputs.
-  const roundTo = sam > 100000 ? 500 : sam > 25000 ? 100 : sam > 5000 ? 50 : 10;
-  const round = (n) => Math.max(roundTo, Math.round(n / roundTo) * roundTo);
+  // Round each milestone based on its own magnitude so that m12 (which is always
+  // a small number) gets finer rounding than m36/m60. A uniform SAM-based increment
+  // would round m12 to the nearest 500, inflating it by 15–25% and creating
+  // artificial tension in the realism indicator.
+  const roundByMagnitude = (n) => {
+    if (n <  2_000) return Math.max( 50, Math.round(n /  50) *  50);
+    if (n < 10_000) return Math.max(100, Math.round(n / 100) * 100);
+    if (n < 50_000) return Math.max(500, Math.round(n / 500) * 500);
+    return Math.max(1_000, Math.round(n / 1_000) * 1_000);
+  };
 
   return {
-    m12Target: round(a12),
-    m36Target: round(a36),
-    m60Target: round(a60),
+    m12Target: roundByMagnitude(a12),
+    m36Target: roundByMagnitude(a36),
+    m60Target: roundByMagnitude(a60),
   };
 }
 

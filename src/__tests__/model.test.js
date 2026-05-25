@@ -46,8 +46,9 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.tam).toBe(500000);
     expect(DEFAULT_INPUTS.samPct).toBe(40);
     // Pre-computed from suggestMilestones(DEFAULT_INPUTS, p=0.008, q=0.30)
-    expect(DEFAULT_INPUTS.m12Target).toBe(1500);
-    expect(DEFAULT_INPUTS.m36Target).toBe(7000);
+    // with magnitude-based rounding: SAM 200k × mid-green Bass × 18%/7% attrition
+    expect(DEFAULT_INPUTS.m12Target).toBe(1700);
+    expect(DEFAULT_INPUTS.m36Target).toBe(6900);
     expect(DEFAULT_INPUTS.m60Target).toBe(15000);
     expect(DEFAULT_INPUTS.initialCPA).toBe(450);
     expect(DEFAULT_INPUTS.steadyStateCPA).toBe(75);
