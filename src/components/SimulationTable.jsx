@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Milestone months shown as rows in the table
 const MILESTONE_MONTHS = [1, 6, 12, 24, 36, 60];
@@ -30,33 +30,56 @@ function realismText(overall) {
 }
 
 /**
- * Small ⓘ badge that reveals a styled tooltip on hover.
- * Positioned below-right of the icon so it doesn't clip in the card header.
+ * Click-toggle tooltip. The ? badge opens the panel; the × button or a click
+ * outside closes it. Hover-only tooltips lose their hover zone when the cursor
+ * moves from the badge to the (absolutely-positioned) panel content, so
+ * click-toggle is the correct pattern for multi-line help text.
  */
 function InfoTooltip({ children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close when the user clicks outside the tooltip
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
   return (
-    <span className="relative inline-flex items-center group/tip ml-1 align-middle">
-      {/* Badge */}
-      <span
-        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-zinc-200 text-zinc-500 text-[9px] font-bold cursor-default select-none leading-none"
+    <span ref={ref} className="relative inline-flex items-center ml-1 align-middle">
+      {/* Badge — toggle on click */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-zinc-200 text-zinc-500 text-[9px] font-bold cursor-pointer select-none leading-none hover:bg-zinc-300 transition-colors"
         aria-label="More information"
+        aria-expanded={open}
       >
         ?
-      </span>
+      </button>
+
       {/* Tooltip panel */}
-      <span
-        role="tooltip"
-        className="
-          pointer-events-none absolute top-5 left-0 z-20
-          w-72 rounded-lg bg-zinc-800 px-3.5 py-3
-          text-xs text-white leading-relaxed
-          opacity-0 group-hover/tip:opacity-100
-          transition-opacity duration-150
-          shadow-lg
-        "
-      >
-        {children}
-      </span>
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute top-5 left-0 z-20 w-72 rounded-lg bg-zinc-800 px-3.5 py-3 text-xs text-white leading-relaxed shadow-lg"
+        >
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute top-2 right-2.5 text-zinc-400 hover:text-white text-sm leading-none transition-colors"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          {children}
+        </span>
+      )}
     </span>
   );
 }
