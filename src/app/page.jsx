@@ -139,7 +139,12 @@ export default function Home() {
               </section>
 
               {/* Step 10: Model Health instrument panel */}
-              <ModelHealthPanel inputs={inputs} institution={selected} />
+              <ModelHealthPanel
+                inputs={inputs}
+                footprintInputs={footprintInputs}
+                scenario={scenario}
+                institution={selected}
+              />
 
               {/* Temporary readout — will be replaced by simulation UI in Steps 8–13 */}
               {activeSimulation && (

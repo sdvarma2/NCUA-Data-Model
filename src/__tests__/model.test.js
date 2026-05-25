@@ -403,6 +403,7 @@ describe("computeModelHealth", () => {
     const h = computeModelHealth(DEFAULT_INPUTS, INST);
     expect(h).toHaveProperty("servicingSavingsPerMemberYr");
     expect(h).toHaveProperty("ratePremiumPerMemberYr");
+    expect(h).toHaveProperty("netPerMemberYr");
     expect(h).toHaveProperty("monthlyNIIper1000");
     expect(h).toHaveProperty("monthlyRatePremiumPer1000");
     expect(h).toHaveProperty("niiCoverageRatio");
@@ -427,6 +428,19 @@ describe("computeModelHealth", () => {
     const more = computeModelHealth({ ...DEFAULT_INPUTS, freeVisits: 8 }, INST);
     const base = computeModelHealth(DEFAULT_INPUTS, INST);
     expect(more.servicingSavingsPerMemberYr).toBeLessThan(base.servicingSavingsPerMemberYr);
+  });
+
+  it("netPerMemberYr equals servicingSavings minus ratePremium", () => {
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.netPerMemberYr).toBeCloseTo(
+      h.servicingSavingsPerMemberYr - h.ratePremiumPerMemberYr, 5
+    );
+  });
+
+  it("netPerMemberYr is positive at defaults (servicing gains outweigh rate concessions)", () => {
+    // At defaults: savings ~$103/yr, rate premium ~$90/yr → net should be > 0
+    const h = computeModelHealth(DEFAULT_INPUTS, INST);
+    expect(h.netPerMemberYr).toBeGreaterThan(0);
   });
 
   it("monthly rate premium equals annual premium × 1000 ÷ 12", () => {

@@ -56,6 +56,23 @@ function HealthRow({ label, value, status = "neutral", hint }) {
   );
 }
 
+// ── Group header ──────────────────────────────────────────────────────────────
+
+function GroupHeader({ label, description }) {
+  return (
+    <div className="pb-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+        {label}
+      </p>
+      {description && (
+        <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
 function fmtDollars(n) {
@@ -71,36 +88,49 @@ function fmtPct(n) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 /**
- * Instrument panel showing six derived "health" values computed from the
+ * Instrument panel showing derived "health" values computed from the
  * current inputs and selected institution. Positioned between the strategy
  * levers and the simulation preview so the user can verify model plausibility
  * before running the animation.
  */
-export default function ModelHealthPanel({ inputs, institution }) {
-  const h = computeModelHealth(inputs, institution);
+export default function ModelHealthPanel({ inputs, footprintInputs, scenario, institution }) {
+  const isScenarioB = scenario === "scenario_b";
+  // In Scenario B the footprint market is what's being added, so health metrics
+  // reflect those inputs. Scenario A shows the expansion-market inputs.
+  const activeInputs = isScenarioB ? footprintInputs : inputs;
+  const h = computeModelHealth(activeInputs, institution);
 
   // ── Color thresholds ──────────────────────────────────────────────────────
 
   const savingsStatus = statusOf(h.servicingSavingsPerMemberYr, [
     { min: 90,  max: 200, status: "green" },
     { min: 50,  max: 89,  status: "amber" },
-    { min: 200, status: "amber" },          // above NCUA ceiling — possibly overstated
-    { max: 49,  status: "red"   },
+    { min: 200,           status: "amber" }, // above NCUA ceiling — possibly overstated
+    { max: 49,            status: "red"   },
+  ]);
+
+  const netStatus = statusOf(h.netPerMemberYr, [
+    { min: 1,  status: "green" },
+    { min: -50, max: 0, status: "amber" },
+    { max: -51, status: "red" },
   ]);
 
   const coverageStatus = statusOf(h.niiCoverageRatio, [
-    { min: 3,   status: "green" },
+    { min: 3,            status: "green" },
     { min: 1.5, max: 2.99, status: "amber" },
-    { max: 1.49, status: "red" },
+    { max: 1.49,         status: "red"   },
   ]);
 
   const cannibStatus = statusOf(h.cannibDragAsPctOfNII, [
-    { max: 0.049, status: "green" },
+    { max: 0.049,           status: "green" },
     { min: 0.05, max: 0.099, status: "amber" },
-    { min: 0.10, status: "red" },
+    { min: 0.10,            status: "red"   },
   ]);
 
   // ── Formatted display values ──────────────────────────────────────────────
+
+  const netSign = h.netPerMemberYr >= 0 ? "+" : "";
+  const netLabel = `${netSign}$${Math.round(h.netPerMemberYr)}/yr`;
 
   const cannibLabel = h.cannibDragAsPctOfNII != null
     ? `${fmtDollars(h.annualCannibDragScenarioB)} (${fmtPct(h.cannibDragAsPctOfNII)} of NII)`
@@ -122,10 +152,15 @@ export default function ModelHealthPanel({ inputs, institution }) {
         </p>
       </div>
 
-      {/* ── Group 1: Per member / year ─────────────────────────────────── */}
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pb-1">
-        Per Member / Year
-      </p>
+      {/* ── Group 1: Per-member servicing economics ────────────────────── */}
+      <GroupHeader
+        label="Per Member / Year"
+        description={
+          isScenarioB
+            ? "Footprint market — does the operational efficiency story hold up before counting interest income?"
+            : "Does the operational efficiency story hold up before counting interest income?"
+        }
+      />
       <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4 mb-4">
         <HealthRow
           label="Servicing savings"
@@ -137,14 +172,25 @@ export default function ModelHealthPanel({ inputs, institution }) {
           label="Rate premium cost"
           value={`$${Math.round(h.ratePremiumPerMemberYr)}`}
           status="neutral"
-          hint="vs. NII below"
+          hint="deposit + loan"
+        />
+        <HealthRow
+          label="Net (savings − premium)"
+          value={netLabel}
+          status={netStatus}
+          hint="target > $0"
         />
       </div>
 
-      {/* ── Group 2: Per 1,000 members / month ────────────────────────── */}
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pb-1">
-        Per 1,000 Members / Month
-      </p>
+      {/* ── Group 2: NII coverage ──────────────────────────────────────── */}
+      <GroupHeader
+        label="Per 1,000 Members / Month"
+        description={
+          isScenarioB
+            ? "Footprint market — is the interest income earned large enough to absorb the rate concessions?"
+            : "Is the interest income earned large enough to absorb the rate concessions?"
+        }
+      />
       <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4 mb-4">
         <HealthRow
           label="Gross NII"
@@ -164,18 +210,23 @@ export default function ModelHealthPanel({ inputs, institution }) {
         />
       </div>
 
-      {/* ── Group 3: Institution risk — Scenario B ─────────────────────── */}
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pb-1">
-        Institution Risk — Scenario B
-      </p>
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4">
-        <HealthRow
-          label="Annual cannibalization drag"
-          value={cannibLabel}
-          status={cannibStatus}
-          hint="target < 5%"
-        />
-      </div>
+      {/* ── Group 3: Institution risk — Scenario B only ────────────────── */}
+      {isScenarioB && (
+        <>
+          <GroupHeader
+            label="Institution Risk — Scenario B"
+            description="How much does rate-matching erode the existing balance sheet's NII?"
+          />
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4">
+            <HealthRow
+              label="Annual cannibalization drag"
+              value={cannibLabel}
+              status={cannibStatus}
+              hint="target < 5%"
+            />
+          </div>
+        </>
+      )}
     </section>
   );
 }

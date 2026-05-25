@@ -489,9 +489,15 @@ export function computeModelHealth(inputs, institution) {
       ? annualCannibDragScenarioB / institutionAnnualNII
       : null;
 
+  // 7. Net per-member economics (savings − rate premium).
+  //    Positive = the servicing efficiency gains outweigh the rate concessions
+  //    before NII is counted. Target > $0; sustained negative is a red flag.
+  const netPerMemberYr = servicingSavingsPerMemberYr - ratePremiumPerMemberYr;
+
   return {
     servicingSavingsPerMemberYr,
     ratePremiumPerMemberYr,
+    netPerMemberYr,
     monthlyNIIper1000,
     monthlyRatePremiumPer1000,
     niiCoverageRatio,
