@@ -47,7 +47,7 @@ function HealthRow({ label, value, status = "neutral", hint }) {
           {value}
         </span>
         {hint && (
-          <span className="text-xs text-zinc-400 leading-tight text-right w-20 hidden sm:block">
+          <span className="text-xs text-zinc-500 leading-tight text-right w-20 hidden sm:block">
             {hint}
           </span>
         )}
@@ -61,11 +61,11 @@ function HealthRow({ label, value, status = "neutral", hint }) {
 function GroupHeader({ label, description }) {
   return (
     <div className="pb-1">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
         {label}
       </p>
       {description && (
-        <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+        <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
           {description}
         </p>
       )}
@@ -163,19 +163,19 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
       />
       <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4 mb-4">
         <HealthRow
-          label="Servicing savings"
+          label="Servicing Savings"
           value={`$${Math.round(h.servicingSavingsPerMemberYr)}`}
           status={savingsStatus}
           hint="target $90–150"
         />
         <HealthRow
-          label="Rate premium cost"
+          label="Rate Premium Cost"
           value={`$${Math.round(h.ratePremiumPerMemberYr)}`}
           status="neutral"
           hint="deposit + loan"
         />
         <HealthRow
-          label="Net (savings − premium)"
+          label="Net (Savings − Premium)"
           value={netLabel}
           status={netStatus}
           hint="target > $0"
@@ -198,12 +198,12 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           status="neutral"
         />
         <HealthRow
-          label="Rate premium cost"
+          label="Rate Premium Cost"
           value={`$${Math.round(h.monthlyRatePremiumPer1000).toLocaleString()}`}
           status="neutral"
         />
         <HealthRow
-          label="NII coverage ratio"
+          label="NII Coverage Ratio"
           value={h.niiCoverageRatio == null ? "—" : `${h.niiCoverageRatio.toFixed(1)}×`}
           status={coverageStatus}
           hint="target > 3×"
@@ -219,7 +219,7 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           />
           <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4">
             <HealthRow
-              label="Annual cannibalization drag"
+              label="Annual Cannibalization Drag"
               value={cannibLabel}
               status={cannibStatus}
               hint="target < 5%"
