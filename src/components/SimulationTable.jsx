@@ -29,11 +29,68 @@ function realismText(overall) {
   return "✗ Implausible";
 }
 
-function CalibrationLine({ label, cal }) {
+/**
+ * Small ⓘ badge that reveals a styled tooltip on hover.
+ * Positioned below-right of the icon so it doesn't clip in the card header.
+ */
+function InfoTooltip({ children }) {
+  return (
+    <span className="relative inline-flex items-center group/tip ml-1 align-middle">
+      {/* Badge */}
+      <span
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-zinc-200 text-zinc-500 text-[9px] font-bold cursor-default select-none leading-none"
+        aria-label="More information"
+      >
+        ?
+      </span>
+      {/* Tooltip panel */}
+      <span
+        role="tooltip"
+        className="
+          pointer-events-none absolute top-5 left-0 z-20
+          w-72 rounded-lg bg-zinc-800 px-3.5 py-3
+          text-xs text-white leading-relaxed
+          opacity-0 group-hover/tip:opacity-100
+          transition-opacity duration-150
+          shadow-lg
+        "
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+function CalibrationLine({ label, cal, showTooltip = false }) {
   if (!cal) return null;
   return (
     <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
-      {label}: p = {cal.p.toFixed(4)}, q = {cal.q.toFixed(3)}
+      <span className="inline-flex items-center gap-0">
+        {label}
+        {showTooltip && (
+          <InfoTooltip>
+            <span className="block font-semibold text-white mb-1.5">Bass Curve Calibration</span>
+            <span className="block mb-2">
+              A Bass Curve models how a new product spreads through a market by separating adoption into two forces.
+            </span>
+            <span className="block mb-1">
+              <span className="font-semibold text-zinc-200">p — Innovation coefficient</span>
+              {" "}(green: 0.003–0.020): the fraction of the market that adopts independently each period, driven by advertising and awareness.
+            </span>
+            <span className="block mb-2">
+              <span className="font-semibold text-zinc-200">q — Imitation coefficient</span>
+              {" "}(green: 0.15–0.45): the rate at which existing members influence non-adopters through word-of-mouth and social proof.
+            </span>
+            <span className="block text-zinc-300 border-t border-zinc-600 pt-2 mt-1">
+              <span className="font-semibold text-white">Plausibility</span> is assessed on three dimensions: p and q within published ranges; Bass curve fits all milestones within ~10% error; no single target under-predicted by more than 10%.{" "}
+              <span className="text-emerald-400">✓ Plausible</span> = all green.{" "}
+              <span className="text-amber-400">⚠ Ambitious</span> = one or more targets may be hard to reach.{" "}
+              <span className="text-red-400">✗ Implausible</span> = parameters outside realistic ranges.
+            </span>
+          </InfoTooltip>
+        )}
+      </span>
+      {": "}p = {cal.p.toFixed(4)}, q = {cal.q.toFixed(3)}
       {" · "}
       <span className={realismTextClass(cal.realismIndicator.overall)}>
         {realismText(cal.realismIndicator.overall)}
@@ -72,8 +129,9 @@ export default function SimulationTable({ simulationA, simulationB, scenario }) 
             Simulation Detail
           </h2>
           <CalibrationLine
-            label={footprintCalibration ? "Expansion" : "Bass fit"}
+            label={footprintCalibration ? "Expansion" : "Bass Fit"}
             cal={calibration}
+            showTooltip
           />
           {footprintCalibration && (
             <CalibrationLine label="Footprint" cal={footprintCalibration} />
