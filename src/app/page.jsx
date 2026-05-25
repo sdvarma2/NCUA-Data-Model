@@ -88,7 +88,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-10 font-sans">
       <h1 className="text-2xl font-semibold text-zinc-900 mb-1">
-        Digital Banking Expansion Model
+        Credit Union Digital-Only Product Expansion Model
       </h1>
       <p className="text-sm text-zinc-500 mb-6">
         Simulate the economics of launching a digital-only product line at a credit union.
