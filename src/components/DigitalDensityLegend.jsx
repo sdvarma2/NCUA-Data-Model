@@ -91,7 +91,7 @@ export default function DigitalDensityLegend({ institutions = [] }) {
       </div>
 
       <p className="mt-3 text-xs text-zinc-500 leading-relaxed">
-        Fewer than a handful of credit unions have more than 50K members per branch (leaning moderately to strongly digital), so this analysis focuses on moving Branch-Heavy and Branch-Balanced institutions toward the Hybrid level of density.
+        Fewer than a handful of credit unions have more than 50K members per branch (leaning moderately to strongly digital).
       </p>
     </div>
   );

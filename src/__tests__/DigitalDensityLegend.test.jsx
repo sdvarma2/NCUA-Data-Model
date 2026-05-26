@@ -55,10 +55,6 @@ describe("DigitalDensityLegend", () => {
       expect(screen.getByText(/fewer than a handful.*50k members per branch/i)).toBeInTheDocument();
     });
 
-    it("mentions moving toward hybrid density", () => {
-      render(<DigitalDensityLegend institutions={INSTITUTIONS} />);
-      expect(screen.getByText(/branch-heavy.*branch-balanced.*hybrid/i)).toBeInTheDocument();
-    });
   });
 
   describe("metrics table", () => {
