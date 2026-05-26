@@ -45,13 +45,18 @@ function computeDigitalROAContext(institution, inputs) {
 
   // Annual per-member program cost at steady state, amortizing CPA over expected
   // member life (1 / attritionSteadyState).
+  //
+  // Mirrors computeServicingDelta's digitalCostPerMemberPerYear — teller transaction
+  // costs are intentionally excluded here.  In the simulation, avgTellerTransactionsPerMonth
+  // appears only on the *traditional* side as a savings driver (what digital members avoid);
+  // it is not re-charged to digital members.  The branch visit subsidy (freeVisits ×
+  // costPerBranchVisit) already captures the cost when a digital member walks into a branch.
   const amortizedCPA = inputs.steadyStateCPA * inputs.digitalAttritionSteadyState;
   const annualProgramCost =
     inputs.maintenanceDigital +
     inputs.platformCost +
     inputs.fraudCost +
     inputs.transactionCostDigital * inputs.avgDigitalTransactionsPerMonth * 12 +
-    inputs.transactionCostTrad * inputs.avgTellerTransactionsPerMonth * 12 +
     inputs.costPerBranchVisit * inputs.freeVisits +
     amortizedCPA;
 
@@ -79,8 +84,19 @@ function computeDigitalROAContext(institution, inputs) {
   const cannibDragBps_year1  = D2A * inputs.depositCannibRateB * inputs.rateBump;
   const cannibDragBps_steady = D2A * inputs.depositCannibRateB * inputs.rateBumpFloor;
 
+  // Cost breakdown for tooltip
+  const costBreakdown = {
+    maintenance:  Math.round(inputs.maintenanceDigital),
+    platform:     Math.round(inputs.platformCost),
+    fraud:        Math.round(inputs.fraudCost),
+    digitalTxns:  Math.round(inputs.transactionCostDigital * inputs.avgDigitalTransactionsPerMonth * 12),
+    branchVisits: Math.round(inputs.costPerBranchVisit * inputs.freeVisits),
+    amortizedCPA: Math.round(amortizedCPA),
+  };
+
   return {
     annualProgramCost: Math.round(annualProgramCost),
+    costBreakdown,
     marginSpreadPct,
     breakEvenDepositBalance,
     ratePremiumSteadyPct,
@@ -104,6 +120,53 @@ function statusClass(s) {
 }
 
 // ── UI primitives ─────────────────────────────────────────────────────────────
+
+/**
+ * Click-toggle info tooltip for the institution card.
+ * Hover+focus opens; click outside or the × button closes.
+ * `className` sets the bubble width (default w-72).
+ */
+function InfoTip({ children, className = "w-72" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1 align-middle">
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={(e) => {
+          // Stay open if mouse moves into the tooltip panel itself
+          if (!e.currentTarget.parentElement?.querySelector("[data-tip-panel]")?.contains(e.relatedTarget)) {
+            setOpen(false);
+          }
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        aria-label="More information"
+        className="rounded-full text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400 transition-colors flex items-center justify-center w-4 h-4"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
+          <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <span
+          data-tip-panel
+          role="tooltip"
+          className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3.5 py-3 text-xs text-white leading-relaxed shadow-lg ${className}`}
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute top-2 right-2.5 text-zinc-400 hover:text-white text-sm leading-none transition-colors"
+            aria-label="Close"
+          >×</button>
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function InfoButton({ onClick }) {
   return (
@@ -167,14 +230,17 @@ function Section({ title, children, action }) {
 }
 
 /**
- * A single ROA-context metric: label, a prominent color-coded value,
- * and a one-to-two sentence description below.
+ * A single ROA-context metric: label (with optional tooltip), a prominent
+ * color-coded value, and a one-to-two sentence description below.
  */
-function ContextBlock({ label, value, status, description }) {
+function ContextBlock({ label, value, status, description, tooltip, tooltipClassName }) {
   return (
     <div className="py-3 border-b border-zinc-100 last:border-0">
       <div className="flex items-baseline justify-between gap-3 mb-1">
-        <span className="text-sm text-zinc-600">{label}</span>
+        <span className="text-sm text-zinc-600 flex items-center">
+          {label}
+          {tooltip && <InfoTip className={tooltipClassName ?? "w-80 max-w-[calc(100vw-2rem)]"}>{tooltip}</InfoTip>}
+        </span>
         <span className={`text-sm font-semibold tabular-nums shrink-0 ${statusClass(status)}`}>
           {value}
         </span>
@@ -280,6 +346,7 @@ export default function InstitutionProfileCard({ institution, institutions = [],
           {/* Break-even deposit balance */}
           {ctx.breakEvenDepositBalance != null ? (() => {
             const be = ctx.breakEvenDepositBalance;
+            const bd = ctx.costBreakdown;
             const status = be < 10000 ? "green" : be < 20000 ? "amber" : "red";
             const statusNote =
               be < 10000
@@ -287,12 +354,46 @@ export default function InstitutionProfileCard({ institution, institutions = [],
                 : be < 20000
                 ? "Achievable, but requires attracting members who carry meaningful deposit balances."
                 : "Challenging — the program can only be ROA-neutral if it targets high-balance members.";
+
+            const tooltip = (
+              <>
+                <span className="block font-semibold text-white mb-2">How break-even deposit is calculated</span>
+                <span className="block mb-2 text-zinc-300">
+                  Each digital member brings a deposit balance that earns NII. The net yield on that balance — after paying the steady-state rate premium and preserving the institution's current ROA — must cover annual program costs.
+                </span>
+                <span className="block font-semibold text-zinc-200 mb-1">Annual program cost (steady state)</span>
+                <table className="w-full mb-2 text-zinc-300">
+                  <tbody>
+                    <tr><td>Account maintenance</td><td className="text-right">${bd.maintenance}</td></tr>
+                    <tr><td>Platform infrastructure</td><td className="text-right">${bd.platform}</td></tr>
+                    <tr><td>Fraud &amp; ID verification</td><td className="text-right">${bd.fraud}</td></tr>
+                    <tr><td>Digital transactions</td><td className="text-right">${bd.digitalTxns}</td></tr>
+                    <tr><td>Branch visits ({inputs.freeVisits}/yr)</td><td className="text-right">${bd.branchVisits}</td></tr>
+                    <tr><td>Amortized CPA</td><td className="text-right">${bd.amortizedCPA}</td></tr>
+                    <tr className="border-t border-zinc-600 font-semibold text-white"><td>Total</td><td className="text-right">${ctx.annualProgramCost}</td></tr>
+                  </tbody>
+                </table>
+                <span className="block font-semibold text-zinc-200 mb-1">Net margin spread</span>
+                <span className="block mb-2 text-zinc-300">
+                  {formatPct(nim_pct)} NIM − {ctx.ratePremiumSteadyPct.toFixed(2)}% steady-state premium − {formatPct(roa_pct)} ROA = {ctx.marginSpreadPct.toFixed(2)}%
+                </span>
+                <span className="block font-semibold text-zinc-200 mb-1">Break-even</span>
+                <span className="block mb-2 text-zinc-300">
+                  ${ctx.annualProgramCost} ÷ {ctx.marginSpreadPct.toFixed(2)}% = {fmtBreakEven(be)}
+                </span>
+                <span className="block text-zinc-400 border-t border-zinc-600 pt-2 mt-1 text-[10px] leading-relaxed">
+                  Deposit-only. Loan cross-sell reduces this threshold significantly — a $10k digital loan adds roughly $300/yr in NII at current margins. Uses institution NIM and ROA from NCUA call report data.
+                </span>
+              </>
+            );
+
             return (
               <ContextBlock
                 label="Break-Even Deposit / Digital Member"
                 value={fmtBreakEven(be)}
                 status={status}
-                description={`Avg deposits each digital member must carry for the program to be ROA-neutral at this institution's current margins. Based on $${ctx.annualProgramCost}/yr in steady-state program costs against a ${ctx.marginSpreadPct.toFixed(2)}% net spread (${formatPct(nim_pct)} NIM − ${ctx.ratePremiumSteadyPct.toFixed(2)}% steady-state premium − ${formatPct(roa_pct)} ROA). ${statusNote}`}
+                tooltip={tooltip}
+                description={`Avg deposits each net-new digital member must carry for the program to be ROA-neutral. Based on $${ctx.annualProgramCost}/yr steady-state program costs against a ${ctx.marginSpreadPct.toFixed(2)}% net spread (${formatPct(nim_pct)} NIM − ${ctx.ratePremiumSteadyPct.toFixed(2)}% premium − ${formatPct(roa_pct)} ROA). ${statusNote}`}
               />
             );
           })() : (
@@ -314,7 +415,7 @@ export default function InstitutionProfileCard({ institution, institutions = [],
                 label="Scenario B Cannibalization Drag"
                 value={`~${y1} bps → ${st} bps`}
                 status={status}
-                description={`Estimated ROA compression (Year 1 → steady state) from existing member deposits repricing to the digital product's premium rate. A floor cost that runs regardless of how many new members are acquired. Rises directly with the rate premium set in Advanced Settings.`}
+                description={`Estimated ROA compression in Year 1 (at initial rate premium), declining to steady state as the premium decays. Applies to the institution's existing deposits, which are approximated as 80% of total assets — the typical credit union deposit-to-asset ratio, since deposits aren't reported as a separate field in NCUA call data. A floor cost independent of new-member acquisition pace; rises with the rate premium in Advanced Settings.`}
               />
             );
           })()}
