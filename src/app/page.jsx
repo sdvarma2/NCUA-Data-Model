@@ -70,9 +70,7 @@ function IntroSection() {
             <span className="font-semibold text-zinc-600">Note:</span> This model was built
             entirely from publicly available information. This is a personal project I invented
             to challenge my own thinking and build AI literacy — not a real exercise I was
-            tasked with by my employer. It really helped stretch the bounds of what I thought would be possible
-            for an executive-level presentation on a short turnaround. I hope you find it
-            useful and inspiring.
+            tasked with by my employer. 
           </p>
         </div>
       )}
