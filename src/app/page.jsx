@@ -116,7 +116,7 @@ export default function Home() {
           {selected && (
             <>
               <section>
-                <InstitutionProfileCard institution={selected} institutions={institutions} />
+                <InstitutionProfileCard institution={selected} institutions={institutions} inputs={inputs} />
               </section>
 
               <section className="space-y-6">

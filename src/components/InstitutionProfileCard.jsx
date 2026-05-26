@@ -3,22 +3,107 @@
 import { useState } from "react";
 import { toTitleCase, formatCurrency, formatPct, formatAssets, formatCount } from "@/lib/formatters";
 import DigitalDensityLegend from "@/components/DigitalDensityLegend";
+import { DEFAULT_INPUTS } from "@/lib/model";
 
 const INTENSITY_LABELS = {
   branch_heavy:    "Branch-Heavy",
   branch_balanced: "Branch-Balanced",
-  hybrid:          "Hybrid*",
+  hybrid:          "Hybrid",
   digital_leaning: "Digital-Leaning",
   very_digital:    "Very Digital",
 };
 
 const INTENSITY_EXPLANATIONS = {
-  branch_heavy:    "Primarily branch-served — most services are delivered in person. Significant efficiency gains are possible with digital adoption.",
-  branch_balanced: "Branch-centric with growing digital adoption. Room to grow digital channels before reducing branch infrastructure.",
-  hybrid:          "Already in the Hybrid* benchmark cohort — the target state for this model. Balances digital reach with selective branch presence.",
-  digital_leaning: "Digital-first with selective branch presence. Well-positioned for digital product expansion.",
-  very_digital:    "Highly digital — minimal branch infrastructure relative to membership.",
+  branch_heavy:
+    "Primarily branch-served — most members interact in person. Often paired with strong ROA in markets with limited digital competition. The question for a digital expansion is whether net-new digital members bring deposit and loan balances that match this institution's existing margin profile.",
+  branch_balanced:
+    "Branch-centric with meaningful digital adoption. The institution's ROA reflects a mature model — digital expansion is accretive when it attracts net-new assets rather than repricing balances already on the books.",
+  hybrid:
+    "High digital density relative to branch count. Well-positioned for a dedicated digital-only channel. The key question is whether a new product tier can grow assets and defend market share at returns consistent with this institution's financial profile.",
+  digital_leaning:
+    "Digital-first with selective branch presence. Incremental digital product additions extend an existing digital strategy with lower infrastructure overhead.",
+  very_digital:
+    "Highly digital — minimal branch infrastructure relative to membership. Near-term digital product additions are natural extensions of an established digital-first model.",
 };
+
+// ── ROA Context helpers ───────────────────────────────────────────────────────
+
+/**
+ * Given an institution and the current model inputs, compute the ROA-anchored
+ * metrics that replace the old "Gap to Hybrid" section.
+ *
+ * Break-even deposit balance: the avg deposits each new digital member must
+ * carry for the channel to be ROA-neutral.  Formula:
+ *   annualProgramCost / marginSpread
+ * where marginSpread = (NIM − steady_rate_premium − ROA) / 100.
+ *
+ * Cannibalization drag: estimated bps of ROA compression from existing deposits
+ * repricing to the digital rate under Scenario B.  Assumes deposits ≈ 80% of assets.
+ */
+function computeDigitalROAContext(institution, inputs) {
+  const { nim_pct, roa_pct } = institution;
+
+  // Annual per-member program cost at steady state, amortizing CPA over expected
+  // member life (1 / attritionSteadyState).
+  const amortizedCPA = inputs.steadyStateCPA * inputs.digitalAttritionSteadyState;
+  const annualProgramCost =
+    inputs.maintenanceDigital +
+    inputs.platformCost +
+    inputs.fraudCost +
+    inputs.transactionCostDigital * inputs.avgDigitalTransactionsPerMonth * 12 +
+    inputs.transactionCostTrad * inputs.avgTellerTransactionsPerMonth * 12 +
+    inputs.costPerBranchVisit * inputs.freeVisits +
+    amortizedCPA;
+
+  // Steady-state rate premium floor: bps → pct
+  const ratePremiumSteadyPct = inputs.rateBumpFloor / 100;
+
+  // Net spread available above current ROA after absorbing the steady-state rate premium.
+  // This is the margin that must cover annual program costs.
+  const marginSpreadPct = nim_pct - ratePremiumSteadyPct - roa_pct;
+
+  // Break-even deposit balance per digital member.
+  // Each member brings balance B; their net income contribution is B × (marginSpread/100).
+  // That must equal annualProgramCost → B = cost / (marginSpread/100).
+  const breakEvenDepositBalance =
+    marginSpreadPct > 0.01
+      ? annualProgramCost / (marginSpreadPct / 100)
+      : null; // NIM − premium − ROA ≤ ~0 → can't break even on deposits alone
+
+  // Scenario B cannibalization ROA drag (in bps).
+  // Existing deposits ≈ 80% of assets.
+  // Additional interest cost = deposits × cannibrateB × ratePremium_decimal.
+  // ROA drag (decimal) = 0.80 × cannibrateB × (rateBump/10000).
+  // ROA drag (bps) = 0.80 × cannibrateB × rateBump.
+  const D2A = 0.80; // deposit-to-asset ratio approximation
+  const cannibDragBps_year1  = D2A * inputs.depositCannibRateB * inputs.rateBump;
+  const cannibDragBps_steady = D2A * inputs.depositCannibRateB * inputs.rateBumpFloor;
+
+  return {
+    annualProgramCost: Math.round(annualProgramCost),
+    marginSpreadPct,
+    breakEvenDepositBalance,
+    ratePremiumSteadyPct,
+    cannibDragBps_year1:  Math.round(cannibDragBps_year1 * 10) / 10,
+    cannibDragBps_steady: Math.round(cannibDragBps_steady * 10) / 10,
+  };
+}
+
+/** Format a break-even balance rounded to the nearest $500. */
+function fmtBreakEven(n) {
+  const r = Math.round(n / 500) * 500;
+  const k = r / 1000;
+  return `~$${Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`}`;
+}
+
+/** Status → Tailwind text-color class. */
+function statusClass(s) {
+  if (s === "green") return "text-emerald-700";
+  if (s === "amber") return "text-amber-700";
+  return "text-red-600";
+}
+
+// ── UI primitives ─────────────────────────────────────────────────────────────
 
 function InfoButton({ onClick }) {
   return (
@@ -81,7 +166,25 @@ function Section({ title, children, action }) {
   );
 }
 
-export default function InstitutionProfileCard({ institution, institutions = [] }) {
+/**
+ * A single ROA-context metric: label, a prominent color-coded value,
+ * and a one-to-two sentence description below.
+ */
+function ContextBlock({ label, value, status, description }) {
+  return (
+    <div className="py-3 border-b border-zinc-100 last:border-0">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <span className="text-sm text-zinc-600">{label}</span>
+        <span className={`text-sm font-semibold tabular-nums shrink-0 ${statusClass(status)}`}>
+          {value}
+        </span>
+      </div>
+      <p className="text-xs text-zinc-500 leading-snug">{description}</p>
+    </div>
+  );
+}
+
+export default function InstitutionProfileCard({ institution, institutions = [], inputs = DEFAULT_INPUTS }) {
   const [showLegend, setShowLegend] = useState(false);
 
   if (!institution) return null;
@@ -90,12 +193,11 @@ export default function InstitutionProfileCard({ institution, institutions = [] 
     CU_NAME, STATE, CITY, assets_b, members, branch_count,
     members_per_branch, opex_per_member, occupancy_per_member,
     nim_pct, roa_pct, digital_intensity,
-    member_gap_to_hybrid, branch_surplus_vs_hybrid, opex_gap_vs_hybrid_median,
     hybrid_opex_p25, hybrid_opex_p50, hybrid_opex_p75,
-    hybrid_occupancy_p50, hybrid_nim_p50, hybrid_roa_p50,
+    hybrid_occupancy_p50,
   } = institution;
 
-  const isAtHybrid = branch_surplus_vs_hybrid === 0 && member_gap_to_hybrid === 0;
+  const ctx = computeDigitalROAContext(institution, inputs);
 
   return (
     <>
@@ -140,12 +242,12 @@ export default function InstitutionProfileCard({ institution, institutions = [] 
         </Section>
 
         {/* Operating Costs */}
-        <Section title="Operating Costs vs Hybrid* Benchmark">
+        <Section title="Operating Costs">
           <MetricRow
             label="Total Operating Cost / Member"
             value={formatCurrency(opex_per_member)}
             benchmarkBand={{
-              label: "Hybrid* Benchmark (Percentile)",
+              label: "High-Digital-Density Peer Range (Percentile)",
               columns: [
                 { label: "25th", value: formatCurrency(hybrid_opex_p25) },
                 { label: "50th", value: formatCurrency(hybrid_opex_p50) },
@@ -157,58 +259,66 @@ export default function InstitutionProfileCard({ institution, institutions = [] 
             label="Occupancy Cost / Member"
             value={formatCurrency(occupancy_per_member)}
             benchmarks={formatCurrency(hybrid_occupancy_p50)}
+            benchmarkLabel="High-digital-density peer median"
           />
         </Section>
 
         {/* Revenue */}
-        <Section title="Revenue & Profitability vs Hybrid* Benchmark">
+        <Section title="Revenue & Profitability">
           <MetricRow
             label="Net Interest Margin"
             value={formatPct(nim_pct)}
-            benchmarks={formatPct(hybrid_nim_p50)}
           />
           <MetricRow
             label="Return on Assets"
             value={formatPct(roa_pct)}
-            benchmarks={formatPct(hybrid_roa_p50)}
           />
         </Section>
 
-        {/* Gap to Hybrid */}
-        <Section title="Gap to Hybrid*">
-          <div className="space-y-2 text-sm">
-            {opex_gap_vs_hybrid_median > 0 ? (
-              <p className="text-zinc-600">
-                <span className="font-semibold text-amber-700">{formatCurrency(opex_gap_vs_hybrid_median)}/member above Hybrid* median</span>
-                {" "}— reducing overhead to Hybrid* levels would free up significant margin.
-              </p>
-            ) : (
-              <p className="text-zinc-600">
-                <span className="font-semibold text-emerald-700">{formatCurrency(Math.abs(opex_gap_vs_hybrid_median))}/member below Hybrid* median</span>
-                {" "}— already operating efficiently relative to the benchmark.
-              </p>
-            )}
+        {/* Digital Program ROA Analysis */}
+        <Section title="Digital Program ROA Analysis">
+          {/* Break-even deposit balance */}
+          {ctx.breakEvenDepositBalance != null ? (() => {
+            const be = ctx.breakEvenDepositBalance;
+            const status = be < 10000 ? "green" : be < 20000 ? "amber" : "red";
+            const statusNote =
+              be < 10000
+                ? "Favorable — consistent with typical credit union member deposit balances."
+                : be < 20000
+                ? "Achievable, but requires attracting members who carry meaningful deposit balances."
+                : "Challenging — the program can only be ROA-neutral if it targets high-balance members.";
+            return (
+              <ContextBlock
+                label="Break-Even Deposit / Digital Member"
+                value={fmtBreakEven(be)}
+                status={status}
+                description={`Avg deposits each digital member must carry for the program to be ROA-neutral at this institution's current margins. Based on $${ctx.annualProgramCost}/yr in steady-state program costs against a ${ctx.marginSpreadPct.toFixed(2)}% net spread (${formatPct(nim_pct)} NIM − ${ctx.ratePremiumSteadyPct.toFixed(2)}% steady-state premium − ${formatPct(roa_pct)} ROA). ${statusNote}`}
+              />
+            );
+          })() : (
+            <ContextBlock
+              label="Break-Even Deposit / Digital Member"
+              value="N/A"
+              status="red"
+              description={`NIM (${formatPct(nim_pct)}) minus the steady-state rate premium and current ROA (${formatPct(roa_pct)}) leaves no net spread to absorb program costs from deposits alone. Loan cross-sell would be required for the program to be ROA-positive.`}
+            />
+          )}
 
-            {isAtHybrid ? (
-              <p className="text-emerald-700 font-semibold">Already at Hybrid* density — no gap to close.</p>
-            ) : branch_surplus_vs_hybrid > 0 ? (
-              <p className="text-zinc-600">
-                <span className="font-semibold">{branch_surplus_vs_hybrid} branches</span>
-                {" "}would need to be consolidated at current membership level to reach Hybrid* density.
-              </p>
-            ) : (
-              <p className="text-zinc-600">
-                Needs{" "}
-                <span className="font-semibold">{formatCount(member_gap_to_hybrid)} members</span>
-                {" "}at current branch count to reach Hybrid* density.
-              </p>
-            )}
-          </div>
+          {/* Scenario B cannibalization drag */}
+          {(() => {
+            const y1 = ctx.cannibDragBps_year1;
+            const st = ctx.cannibDragBps_steady;
+            const status = y1 < 3 ? "green" : y1 < 8 ? "amber" : "red";
+            return (
+              <ContextBlock
+                label="Scenario B Cannibalization Drag"
+                value={`~${y1} bps → ${st} bps`}
+                status={status}
+                description={`Estimated ROA compression (Year 1 → steady state) from existing member deposits repricing to the digital product's premium rate. A floor cost that runs regardless of how many new members are acquired. Rises directly with the rate premium set in Advanced Settings.`}
+              />
+            );
+          })()}
         </Section>
-
-        <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
-          *Refer to the Digital Density info-tip for a definition of this term.
-        </p>
       </div>
 
       {/* Digital Density Legend Modal */}
@@ -234,7 +344,7 @@ export default function InstitutionProfileCard({ institution, institutions = [] 
               </button>
             </div>
             <p className="text-sm text-zinc-500 leading-relaxed mb-5">
-              Digital Density refers to the how many members an institution has per branch. Higher members per branch (density) indicates stronger digital reliance across the institution's membership. For the purposes of this model, the goal is to simulate strategies that move Branch-Balanced and Branch-Heavy institutions towards the Hybrid model.
+              Digital Density measures members per branch. Higher density indicates greater digital reliance across the membership. Institutions are classified into five tiers based on NCUA call report data. A higher tier reflects existing digital adoption — it does not imply that lower-density institutions need to change their model; it describes where they currently sit.
             </p>
             <DigitalDensityLegend institutions={institutions} />
           </div>

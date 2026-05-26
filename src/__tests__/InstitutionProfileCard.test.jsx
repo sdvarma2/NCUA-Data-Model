@@ -87,7 +87,7 @@ describe("InstitutionProfileCard", () => {
 
     it("shows the hybrid tier label", () => {
       render(<InstitutionProfileCard institution={HYBRID} />);
-      expect(screen.getByText("Hybrid*")).toBeInTheDocument();
+      expect(screen.getByText("Hybrid")).toBeInTheDocument();
     });
 
     it("shows a plain-English explanation for branch_heavy", () => {
@@ -102,7 +102,7 @@ describe("InstitutionProfileCard", () => {
 
     it("shows a plain-English explanation for hybrid", () => {
       render(<InstitutionProfileCard institution={HYBRID} />);
-      expect(screen.getByText(/benchmark cohort/i)).toBeInTheDocument();
+      expect(screen.getByText(/high digital density/i)).toBeInTheDocument();
     });
 
     it("shows members per branch", () => {
@@ -130,9 +130,9 @@ describe("InstitutionProfileCard", () => {
       expect(screen.getByText("$582")).toBeInTheDocument(); // p75
     });
 
-    it("renders the 'Hybrid* Benchmark (Percentile)' band label below opex", () => {
+    it("renders the peer-range band label below opex", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("Hybrid* Benchmark (Percentile)")).toBeInTheDocument();
+      expect(screen.getByText("High-Digital-Density Peer Range (Percentile)")).toBeInTheDocument();
     });
 
     it("renders 25th, 50th, 75th percentile column labels in the opex band", () => {
@@ -160,49 +160,58 @@ describe("InstitutionProfileCard", () => {
       expect(screen.getByText("2.6%")).toBeInTheDocument();
     });
 
-    it("renders the hybrid NIM benchmark", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("2.7%")).toBeInTheDocument();
-    });
-
     it("renders ROA", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
       expect(screen.getByText("1.3%")).toBeInTheDocument();
     });
   });
 
-  describe("gap to hybrid section", () => {
-    it("shows opex savings opportunity when institution is above hybrid median", () => {
+  describe("digital program ROA analysis section", () => {
+    it("renders the section heading", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText(/\$223\/member above Hybrid\* median/i)).toBeInTheDocument();
+      expect(screen.getByText("Digital Program ROA Analysis")).toBeInTheDocument();
     });
 
-    it("shows below-median message when institution is already below hybrid median", () => {
-      render(<InstitutionProfileCard institution={BRANCH_BALANCED} />);
-      expect(screen.getByText(/\$28\/member below Hybrid\* median/i)).toBeInTheDocument();
-    });
-
-    it("shows branch surplus count when positive", () => {
+    it("renders the break-even deposit balance label", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText((_, el) =>
-        el?.tagName === "P" && /52 branches would need to be consolidated/i.test(el.textContent)
-      )).toBeInTheDocument();
+      expect(screen.getByText("Break-Even Deposit / Digital Member")).toBeInTheDocument();
     });
 
-    it("shows member gap when branch surplus is zero and member gap is positive", () => {
-      const memberGapOnly = { ...BRANCH_BALANCED, branch_surplus_vs_hybrid: 0, member_gap_to_hybrid: 905311 };
-      render(<InstitutionProfileCard institution={memberGapOnly} />);
-      expect(screen.getByText(/905,311 members/i)).toBeInTheDocument();
+    it("renders the break-even value in ~$Xk format", () => {
+      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
+      // BRANCH_HEAVY: NIM=2.553, ROA=1.305, spread≈1.0% → ~$23k
+      expect(screen.getByText(/^~\$\d+(\.\d)?k$/)).toBeInTheDocument();
     });
 
-    it("shows at-target message when institution is already at Hybrid* density", () => {
+    it("renders the Scenario B cannibalization drag label", () => {
+      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
+      expect(screen.getByText("Scenario B Cannibalization Drag")).toBeInTheDocument();
+    });
+
+    it("renders the cannib drag value in bps format", () => {
+      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
+      // Default: ~2 bps → 1 bps
+      expect(screen.getByText(/\d+(\.\d)? bps → \d+(\.\d)? bps/)).toBeInTheDocument();
+    });
+
+    it("shows a green break-even for HYBRID (high NIM, low ROA)", () => {
+      // HYBRID: NIM=3.891, ROA=0.676, spread≈2.965% → ~$8k → green
       render(<InstitutionProfileCard institution={HYBRID} />);
-      expect(screen.getByText(/already at Hybrid\* density/i)).toBeInTheDocument();
+      const value = screen.getByText(/^~\$\d+(\.\d)?k$/);
+      expect(value.className).toMatch(/emerald/);
     });
 
-    it("renders a footnote referencing the Digital Density info-tip", () => {
+    it("shows an amber break-even for BRANCH_BALANCED (moderate spread)", () => {
+      // BRANCH_BALANCED: NIM=3.548, ROA=1.409, spread≈1.889% → ~$12.5k → amber
+      render(<InstitutionProfileCard institution={BRANCH_BALANCED} />);
+      const value = screen.getByText(/^~\$\d+(\.\d)?k$/);
+      expect(value.className).toMatch(/amber/);
+    });
+
+    it("description includes the institution's NIM", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText(/\*Refer to the Digital Density info-tip/i)).toBeInTheDocument();
+      // Description text includes NIM formatted as X.X%
+      expect(screen.getByText(/2\.6% NIM/)).toBeInTheDocument();
     });
   });
 
@@ -237,7 +246,7 @@ describe("InstitutionProfileCard", () => {
       const user = userEvent.setup();
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} institutions={INSTITUTIONS} />);
       await user.click(screen.getByRole("button", { name: /learn more about digital density/i }));
-      expect(screen.getByText(/digital density refers to.*members.*per branch/i)).toBeInTheDocument();
+      expect(screen.getByText(/digital density measures members per branch/i)).toBeInTheDocument();
     });
 
     it("clicking the close button dismisses the modal", async () => {
