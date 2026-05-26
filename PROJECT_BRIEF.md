@@ -665,7 +665,7 @@ Replace the current "simulation preview" section with a compact table showing ke
 
 This is the primary debugging surface — it lets you trace the monthly math and spot if any component is implausibly large or small. Both scenarios (A and B) shown in separate rows or via a toggle.
 
-**12. Evidence tooltips on every Advanced Settings input**
+**12. ✅ Evidence tooltips on every Advanced Settings input**
 
 Add a `(?)` icon next to each input label. On hover/click, show a tooltip with:
 - The source citation (from the evidence column in the Advanced Settings Variables table above)

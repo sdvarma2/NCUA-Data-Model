@@ -271,6 +271,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={50000} min={50000} max={5000000}
           value={inputs.tam}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="The total number of households in your target geography — everyone you could theoretically serve, before filtering for creditworthiness or product fit. Use MSA or county-level household counts from Census data. Setting this too broadly inflates SAM and produces over-optimistic member projections; scope it to your actual launch market."
         />
         <NumberField
           fieldKey="samPct"
@@ -300,6 +302,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={250} min={0} max={500000}
           value={inputs.m12Target}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="Net active members after attrition — not gross accounts opened. An active member has funded their account and is transacting. The Bass Curve optimizer fits p and q to hit all three milestones simultaneously, weighting Month 60 most heavily (3×). Month 12 reflects early-adopter signal; if this target is much higher than the Bass curve's natural early shape, the Simulation Detail will show ⚠ Ambitious."
         />
         <NumberField
           fieldKey="m36Target"
@@ -308,6 +312,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={500} min={0} max={500000}
           value={inputs.m36Target}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="Net active members after attrition at the 3-year mark. This is the inflection-point test — by Month 36, a realistic Bass Curve should be well past peak adoption velocity and settling into steady growth. Month 36 is weighted 2× in the Bass calibration optimizer. Use 'Suggest from SAM' to generate a value consistent with realistic Bass parameters for your SAM size."
         />
         <NumberField
           fieldKey="m60Target"
@@ -316,6 +322,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={1000} min={0} max={500000}
           value={inputs.m60Target}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="Net active members after attrition at the 5-year planning horizon — the primary target the model is calibrated to. Weighted 3× in the Bass optimizer, so the calibrated curve will nail this number first and accept larger residuals at Months 12 and 36. As a sanity check: Month 60 active members should be noticeably less than the SAM (market saturation takes longer than 5 years for most products) and noticeably less than total gross acquired (attrition is real)."
         />
 
         {/* Suggest from SAM button */}
@@ -408,6 +416,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={5} min={10} max={500}
           value={inputs.steadyStateCPA}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="The cost per active member at maturity, once organic channels — referrals, word-of-mouth, and app-store discovery — are driving most acquisition. At steady state the credit union is paying for conversion of already-aware prospects, not brand introduction. Cornerstone/CUES data shows mature credit union digital CAC of $50–100 per funded account. CPA decays from Initial to Steady-State along a logistic curve over the number of months set below."
         />
         <NumberField
           fieldKey="monthsToSteadyState"
@@ -416,6 +426,8 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={3} min={6} max={60}
           value={inputs.monthsToSteadyState}
           onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip="How long the CPA decay curve takes to travel from Initial CPA to Steady-State CPA. The model uses a logistic (S-curve) shape — CPA falls slowly at first, accelerates mid-program, then flattens near steady state. At 24 months, CPA is ~95% of the way to steady state. Use a longer horizon for markets where brand-building is slow (rural markets, highly competitive metros); shorter if the credit union already has strong recognition or an active SEG relationship in the target area."
         />
 
       </div>
@@ -447,8 +459,34 @@ const SECTIONS = [
         tooltip: "The Rate Bump Decay represents how many basis points per year you'll lower your deposit rate bump by." },
       { key: "rateBumpFloor",    label: "Rate Bump Floor",    unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 200,
         tooltip: "The Rate Bump Floor represents the lowest value your Rate Bump will decay to. When set to 0, the premium you pay over standard rates will decay each year until the rate matches your standard rates." },
-      { key: "depositCannibRateA", label: "Deposit Cannibalization — Expansion Markets Only", unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25     },
-      { key: "depositCannibRateB", label: "Deposit Cannibalization — All Markets",            unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+      { key: "depositCannibRateA", label: "Deposit Cannibalization — Expansion Markets Only", unit: "% / yr",         scale: 100, precision: 1, step: 0.1,  min: 0,     max: 25,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The fraction of the institution&rsquo;s <strong>existing</strong> deposit balance sheet that reprices to the digital product&rsquo;s premium rate each year. Cannibalization occurs when existing members shift balances to the new digital accounts to capture the higher rate — the institution pays more interest on balances it already held.
+            </p>
+            <p className="mb-2">
+              <strong>Expansion Only (0.5%):</strong> minimal. New-market members are unlikely to be existing depositors; only the most rate-sensitive current members notice and move balances.
+            </p>
+            <p>Applied to the full existing deposit balance sheet, not just digital member deposits. This cost runs every month regardless of how many digital members are acquired.</p>
+          </>
+        ),
+      },
+      { key: "depositCannibRateB", label: "Deposit Cannibalization — All Markets",            unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The fraction of the institution&rsquo;s <strong>existing</strong> deposit balance sheet that reprices to the digital product&rsquo;s premium rate each year under the All Markets scenario.
+            </p>
+            <p className="mb-2">
+              <strong>All Markets (5%):</strong> substantially higher because the credit union is actively marketing the digital product to existing members. Rate-aware depositors opt in to earn the better rate on balances they already have — a predictable response to an internally publicized rate advantage.
+            </p>
+            <p>Applied to the full existing deposit balance sheet, not just digital member deposits. The difference between Scenario A and B cannibalization rates is one of the key drivers of the wider spread in Scenario B outcomes.</p>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -473,10 +511,40 @@ const SECTIONS = [
           </>
         ),
       },
-      { key: "avgLoanBalance",      label: "Average Loan Balance",                           unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
-      { key: "rateCut",             label: "Rate Cut — Digital Loans",                        unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200    },
-      { key: "loanCannibRateA",     label: "Loan Cannibalization — Expansion Markets Only",   unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25     },
-      { key: "loanCannibRateB",     label: "Loan Cannibalization — All Markets",              unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50     },
+      { key: "avgLoanBalance",      label: "Average Loan Balance",                           unit: "$ / borrower",   scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: "The average outstanding loan balance per digital member who carries a loan. Blends across all loan types the product offers — personal, auto, HELOC, etc. NCUA call report data shows credit union average loan balances ranging from $8k (personal/consumer) to $22k+ (auto and HELOC). Use a weighted average that reflects your expected product mix for digital-channel borrowers.",
+      },
+      { key: "rateCut",             label: "Rate Cut — Digital Loans",                        unit: "bps",            scale: 1,   precision: 0, step: 5,    min: 0,     max: 200,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: "The reduction in loan interest rate offered to digital members as an incentive for originating through the digital channel. This is a revenue reduction — the credit union earns less NII per loan dollar compared to its standard loan book. A 25 bps cut is a modest incentive; 50–75 bps is more competitive for auto or personal loans. Set to 0 if the digital product does not offer a rate advantage on loans.",
+      },
+      { key: "loanCannibRateA",     label: "Loan Cannibalization — Expansion Markets Only",   unit: "% / yr",         scale: 100, precision: 2, step: 0.05, min: 0,     max: 25,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The fraction of the institution&rsquo;s <strong>existing</strong> loan book that reprices to the digital product&rsquo;s reduced rate each year. Occurs when existing borrowers refinance through the digital channel to capture the lower rate.
+            </p>
+            <p>
+              <strong>Expansion Only (0.15%):</strong> minimal. New-market members are unlikely to be existing borrowers, so cannibalization of the existing loan book is low — only existing members who notice the rate differential and actively refinance.
+            </p>
+          </>
+        ),
+      },
+      { key: "loanCannibRateB",     label: "Loan Cannibalization — All Markets",              unit: "% / yr",         scale: 100, precision: 1, step: 0.5,  min: 0,     max: 50,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The fraction of the institution&rsquo;s <strong>existing</strong> loan book that reprices to the digital product&rsquo;s reduced rate each year under the All Markets scenario.
+            </p>
+            <p>
+              <strong>All Markets (1.5%):</strong> higher because existing borrowers are actively aware of the digital product and its rate advantage. Rate-sensitive members who are already familiar with the credit union are more likely to refinance existing balances through the digital channel to save on interest.
+            </p>
+          </>
+        ),
+      },
     ],
   },
   {
@@ -522,10 +590,49 @@ const SECTIONS = [
       },
       { key: "transactionCostTrad",            label: "Transaction Cost — Teller",            unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.25, min: 0,  max: 20    },
       { key: "transactionCostDigital",         label: "Transaction Cost — Digital",           unit: "$ / transaction", scale: 1,   precision: 2,  step: 0.01, min: 0,  max: 5     },
-      { key: "avgTellerTransactionsPerMonth",  label: "Avg Teller Transactions / Month",      unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10    },
-      { key: "avgDigitalTransactionsPerMonth", label: "Avg Digital Transactions / Month",     unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
-      { key: "platformCost",                   label: "Digital Platform Infrastructure",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200   },
-      { key: "fraudCost",                      label: "Digital Fraud & ID Verification",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100   },
+      { key: "avgTellerTransactionsPerMonth",  label: "Avg Teller Transactions / Month",      unit: "txns / mo",       scale: 1,   precision: 3,  step: 0.083,min: 0,  max: 10,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The average number of teller interactions per digital member per month. The default of 0.333 equals 4 teller visits per year — consistent with the Federal Reserve&rsquo;s &ldquo;How America Banks&rdquo; survey finding that even digital-primary households average 3–5 branch visits annually for complex needs (loan closings, disputes, large-value transactions).
+            </p>
+            <p>
+              Adjust down if the digital product has no branch access; adjust up if your members are known to be branch-reliant. This drives the teller transaction cost on digital members&rsquo; side of the servicing savings calculation.
+            </p>
+          </>
+        ),
+      },
+      { key: "avgDigitalTransactionsPerMonth", label: "Avg Digital Transactions / Month",     unit: "txns / mo",       scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: "The average number of digital self-service transactions per active member per month — app logins, transfers, bill pay, mobile deposits, and similar. Cornerstone Advisors and Alkami research shows active digital banking users average 18–25 transactions/month. The 20 txns/month default is conservative for truly engaged digital-only members. Raise it if your digital product targets heavy transactors; lower it for a savings-oriented product.",
+      },
+      { key: "platformCost",                   label: "Digital Platform Infrastructure",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 5,    min: 0,  max: 200,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The annual per-member cost of running the digital platform: core banking API access, mobile app hosting, cloud infrastructure, and third-party fintech integrations (e.g., Plaid, Galileo, or similar). <strong>Do not include fraud, ID verification, or account maintenance here</strong> — those are captured in separate fields.
+            </p>
+            <p>
+              CUSO and white-label digital banking vendors typically price at $50–120/member/year at credit-union scale. The $72 default reflects mid-tier digital banking infrastructure without proprietary build costs.
+            </p>
+          </>
+        ),
+      },
+      { key: "fraudCost",                      label: "Digital Fraud & ID Verification",      unit: "$ / member / yr", scale: 1,   precision: 0,  step: 1,    min: 0,  max: 100,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The annual per-member cost of digital fraud monitoring, identity verification at onboarding, and dispute resolution — the incremental risk cost of operating a no-branch, digital-only channel. Includes KYC/AML screening, ongoing transaction monitoring, and chargeback processing.
+            </p>
+            <p>
+              GIACT, Alloy, and Socure publish per-member pricing in the $8–20/year range at scale for ID verification alone. Add fraud losses and dispute handling and $15–25/year is a realistic all-in figure. The $15 default is on the lower end; raise it if the product targets thin-file or new-to-credit segments with higher fraud exposure.
+            </p>
+          </>
+        ),
+      },
       { key: "costPerBranchVisit", label: "Cost Per Branch Visit",   unit: "$ / visit",   scale: 1, precision: 2, step: 0.5, min: 0, max: 50,
         tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
         tooltip: (
@@ -575,8 +682,32 @@ const SECTIONS = [
     id: "retention",
     label: "Retention",
     fields: [
-      { key: "digitalAttritionYear1",       label: "Digital Attrition — Year 1",        unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
-      { key: "digitalAttritionSteadyState", label: "Digital Attrition — Steady State",  unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100 },
+      { key: "digitalAttritionYear1",       label: "Digital Attrition — Year 1",        unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The annual attrition rate in the first year of membership. Year 1 attrition is structurally higher than steady-state because it includes <strong>funded-but-inactive accounts</strong> — members who opened and funded an account but never established a usage pattern and churned out. This is a known characteristic of digital-only products.
+            </p>
+            <p>
+              Neobank cohort data (Chime, Current, Varo disclosures) consistently shows 15–25% first-year attrition before the product reaches scale and improves onboarding. Credit unions with limited digital brand recognition should expect the higher end of that range.
+            </p>
+          </>
+        ),
+      },
+      { key: "digitalAttritionSteadyState", label: "Digital Attrition — Steady State",  unit: "% / yr", scale: 100, precision: 0, step: 1, min: 0, max: 100,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              The annual attrition rate for <strong>engaged, active members</strong> past their first year — those who have demonstrated a real banking relationship by transacting regularly. This is the long-run retention benchmark.
+            </p>
+            <p>
+              FDIC and NCUA member retention data for digital-primary credit union segments shows 5–10% annual attrition. The 7% default reflects a digital credit union that retains members better than a typical neobank but hasn&rsquo;t yet achieved the loyalty of a full-service branch relationship.
+            </p>
+          </>
+        ),
+      },
     ],
   },
 ];
