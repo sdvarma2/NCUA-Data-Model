@@ -6,10 +6,11 @@ import InstitutionProfileCard from "@/components/InstitutionProfileCard";
 import ScenarioToggle from "@/components/ScenarioToggle";
 import ModelInputs from "@/components/ModelInputs";
 import AdvancedSettings, { FootprintSettings } from "@/components/AdvancedSettings";
-import ModelHealthPanel from "@/components/ModelHealthPanel";
 import SimulationTable from "@/components/SimulationTable";
-import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS } from "@/lib/model";
-import { resolveInputs } from "@/lib/levers";
+import SimulationStage from "@/components/SimulationStage";
+import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, suggestMilestones } from "@/lib/model";
+import { resolveInputs, LEVER_PRESETS } from "@/lib/levers";
+import { MARKET_OPPORTUNITY_TAM } from "@/components/ModelInputs";
 
 export default function Home() {
   const [institutions, setInstitutions] = useState([]);
@@ -39,6 +40,49 @@ export default function Home() {
 
   function handleLeverChange(id, value) {
     setLevers((prev) => ({ ...prev, [id]: value }));
+
+    // Market Opportunity directly sets TAM and re-suggests milestones so that
+    // m12/m36/m60 targets stay coherent with the new market size.
+    if (id === "marketOpportunity") {
+      const newTam = MARKET_OPPORTUNITY_TAM[value];
+      if (newTam != null) {
+        setAdvancedOverrides((prev) => {
+          const mergedInputs = { ...DEFAULT_INPUTS, ...prev, tam: newTam };
+          const suggested   = suggestMilestones(mergedInputs);
+          return { ...prev, tam: newTam, ...suggested };
+        });
+      }
+    }
+
+    // Rate Competitiveness sets deposit/loan rate fields — no milestone re-suggestion needed.
+    if (id === "rateCompetitiveness") {
+      const preset = LEVER_PRESETS.rateCompetitiveness[value];
+      if (preset) {
+        setAdvancedOverrides((prev) => ({ ...prev, ...preset }));
+      }
+    }
+
+    // Acquisition Aggression sets CPA economics only — no milestone re-suggestion needed
+    // because CPA is a pure cost overlay and doesn't affect Bass curve calibration.
+    if (id === "acquisitionAggression") {
+      const preset = LEVER_PRESETS.acquisitionAggression[value];
+      if (preset) {
+        setAdvancedOverrides((prev) => ({ ...prev, ...preset }));
+      }
+    }
+
+    // Target Member Profile applies deposit/loan/attrition presets and re-suggests
+    // milestones, since attrition rates affect Bass calibration.
+    if (id === "memberProfile") {
+      const preset = LEVER_PRESETS.memberProfile[value];
+      if (preset) {
+        setAdvancedOverrides((prev) => {
+          const mergedInputs = { ...DEFAULT_INPUTS, ...prev, ...preset };
+          const suggested   = suggestMilestones(mergedInputs);
+          return { ...prev, ...preset, ...suggested };
+        });
+      }
+    }
   }
 
   /** Single-key override from Advanced Settings number/text fields. */
@@ -103,57 +147,68 @@ export default function Home() {
       )}
 
       {institutionCount !== null && (
-        <div className="max-w-2xl space-y-8">
-          {/* Step 1: Select an institution */}
-          <section>
-            <InstitutionSelector
-              institutions={institutions}
-              onSelect={setSelected}
-            />
-          </section>
+        <div className="space-y-8">
+          <div className="max-w-2xl space-y-8">
+            {/* Step 1: Select an institution */}
+            <section>
+              <InstitutionSelector
+                institutions={institutions}
+                onSelect={setSelected}
+              />
+            </section>
 
-          {/* Steps 2–4: Profile, scenario, levers — only shown after selection */}
-          {selected && (
-            <>
-              <section>
-                <InstitutionProfileCard institution={selected} institutions={institutions} inputs={inputs} />
-              </section>
+            {/* Steps 2–4: Profile, scenario, levers — only shown after selection */}
+            {selected && (
+              <>
+                <section>
+                  <InstitutionProfileCard institution={selected} institutions={institutions} inputs={inputs} />
+                </section>
 
-              <section className="space-y-6">
-                <ScenarioToggle scenario={scenario} onChange={setScenario} />
-                <ModelInputs levers={levers} onChange={handleLeverChange} />
-                <AdvancedSettings
-                  inputs={inputs}
-                  onChange={handleAdvancedChange}
-                  onBatchChange={handleAdvancedBatchChange}
-                />
-                {scenario === "scenario_b" && (
-                  <FootprintSettings
-                    inputs={footprintInputs}
-                    marketing={footprintMarketing}
-                    onMarketingChange={setFootprintMarketing}
-                    onChange={handleFootprintChange}
+                <section className="space-y-6">
+                  <ScenarioToggle scenario={scenario} onChange={setScenario} />
+                  <ModelInputs levers={levers} onChange={handleLeverChange} />
+                  <AdvancedSettings
+                    inputs={inputs}
+                    onChange={handleAdvancedChange}
+                    onBatchChange={handleAdvancedBatchChange}
+                    footprintInputs={footprintInputs}
+                    scenario={scenario}
+                    institution={selected}
                   />
-                )}
-              </section>
+                  {scenario === "scenario_b" && (
+                    <FootprintSettings
+                      inputs={footprintInputs}
+                      marketing={footprintMarketing}
+                      onMarketingChange={setFootprintMarketing}
+                      onChange={handleFootprintChange}
+                    />
+                  )}
+                </section>
+              </>
+            )}
+          </div>
 
-              {/* Step 10: Model Health instrument panel */}
-              <ModelHealthPanel
-                inputs={inputs}
-                footprintInputs={footprintInputs}
+          {/* Phase 3: Simulation stage — full-width within the padded content area */}
+          {selected && (simulationA || simulationB) && (
+            <section className="max-w-4xl">
+              <SimulationStage
+                simulationA={simulationA}
+                simulationB={simulationB}
                 scenario={scenario}
                 institution={selected}
               />
+            </section>
+          )}
 
-              {/* Step 11: Tabular simulation detail */}
-              {(simulationA || simulationB) && (
-                <SimulationTable
-                  simulationA={simulationA}
-                  simulationB={simulationB}
-                  scenario={scenario}
-                />
-              )}
-            </>
+          {/* Tabular simulation detail — collapsible reference */}
+          {selected && (simulationA || simulationB) && (
+            <div className="max-w-2xl">
+              <SimulationTable
+                simulationA={simulationA}
+                simulationB={simulationB}
+                scenario={scenario}
+              />
+            </div>
           )}
         </div>
       )}

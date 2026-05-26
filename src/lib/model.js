@@ -4,7 +4,7 @@
 export const DEFAULT_INPUTS = {
   // Acquisition — Market Definition
   marketName: "Expansion Market",  // label only — chart headers, summary outputs
-  tam: 500000,                     // Total Addressable Market (households)
+  tam: 500000,                     // Total Addressable Market (potential members)
   samPct: 40,                      // SAM as % of TAM
 
   // Acquisition — Membership Milestones (net active members)
@@ -16,8 +16,8 @@ export const DEFAULT_INPUTS = {
 
   // Acquisition — CPA Economics (logistic decay curve)
   initialCPA: 450,           // $/active member, early market; Cornerstone: new-market CU CAC $200–400; expansion at/above top of range
-  steadyStateCPA: 75,        // $/active member, mature market (organic + referral)
-  monthsToSteadyState: 24,   // Months for CPA to reach ~steady-state; typical regional brand-building horizon
+  steadyStateCPA: 225,       // $/active member; floor rarely reached in 5yr window — see Acquisition Aggression lever
+  monthsToSteadyState: 60,   // months; network effects take longer than one planning cycle for new-market CUs
 
   // Deposits
   avgDepositBalance: 18000,
@@ -26,7 +26,7 @@ export const DEFAULT_INPUTS = {
   rateBumpFloor: 25,     // bps — decay stops here; rate advantage persists at this floor
 
   // Loans
-  loanPenetrationRate: 0.10,
+  loanPenetrationRate: 0.10,  // conservative 5-yr avg; SoFi ~20% after years of brand-building sets ceiling
   avgLoanBalance: 10000,
   rateCut: 25,           // bps below standard rate offered to digital members
 
@@ -95,9 +95,11 @@ export const DEFAULT_FOOTPRINT_INPUTS = {
 
 /** Market Competitiveness presets — applied immediately when the toggle changes. */
 export const MARKET_COMPETITIVENESS_PRESETS = {
-  Low:    { initialCPA: 300, steadyStateCPA: 50,  monthsToSteadyState: 18 },
-  Medium: { initialCPA: 450, steadyStateCPA: 75,  monthsToSteadyState: 24 },
-  High:   { initialCPA: 650, steadyStateCPA: 110, monthsToSteadyState: 36 },
+  // Steady-state floors updated to reflect realistic 5-year CPA decay in new-market CU expansion.
+  // Higher competition → higher CPA floor (weaker network effects, crowded acquisition channels).
+  Low:    { initialCPA: 300, steadyStateCPA: 175, monthsToSteadyState: 60 },
+  Medium: { initialCPA: 450, steadyStateCPA: 225, monthsToSteadyState: 60 },
+  High:   { initialCPA: 650, steadyStateCPA: 275, monthsToSteadyState: 60 },
 };
 
 // ── Bass diffusion helpers ────────────────────────────────────────────────────

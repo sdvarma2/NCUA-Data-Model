@@ -75,15 +75,6 @@ function computeDigitalROAContext(institution, inputs) {
       ? annualProgramCost / (marginSpreadPct / 100)
       : null; // NIM − premium − ROA ≤ ~0 → can't break even on deposits alone
 
-  // Scenario B cannibalization ROA drag (in bps).
-  // Existing deposits ≈ 80% of assets.
-  // Additional interest cost = deposits × cannibrateB × ratePremium_decimal.
-  // ROA drag (decimal) = 0.80 × cannibrateB × (rateBump/10000).
-  // ROA drag (bps) = 0.80 × cannibrateB × rateBump.
-  const D2A = 0.80; // deposit-to-asset ratio approximation
-  const cannibDragBps_year1  = D2A * inputs.depositCannibRateB * inputs.rateBump;
-  const cannibDragBps_steady = D2A * inputs.depositCannibRateB * inputs.rateBumpFloor;
-
   // Cost breakdown for tooltip
   const costBreakdown = {
     maintenance:  Math.round(inputs.maintenanceDigital),
@@ -100,8 +91,6 @@ function computeDigitalROAContext(institution, inputs) {
     marginSpreadPct,
     breakEvenDepositBalance,
     ratePremiumSteadyPct,
-    cannibDragBps_year1:  Math.round(cannibDragBps_year1 * 10) / 10,
-    cannibDragBps_steady: Math.round(cannibDragBps_steady * 10) / 10,
   };
 }
 
@@ -257,10 +246,7 @@ export default function InstitutionProfileCard({ institution, institutions = [],
 
   const {
     CU_NAME, STATE, CITY, assets_b, members, branch_count,
-    members_per_branch, opex_per_member, occupancy_per_member,
-    nim_pct, roa_pct, digital_intensity,
-    hybrid_opex_p25, hybrid_opex_p50, hybrid_opex_p75,
-    hybrid_occupancy_p50,
+    members_per_branch, nim_pct, roa_pct, digital_intensity,
   } = institution;
 
   const ctx = computeDigitalROAContext(institution, inputs);
@@ -305,28 +291,6 @@ export default function InstitutionProfileCard({ institution, institutions = [],
           <p className="text-xs text-zinc-500 leading-relaxed">
             {INTENSITY_EXPLANATIONS[digital_intensity]}
           </p>
-        </Section>
-
-        {/* Operating Costs */}
-        <Section title="Operating Costs">
-          <MetricRow
-            label="Total Operating Cost / Member"
-            value={formatCurrency(opex_per_member)}
-            benchmarkBand={{
-              label: "High-Digital-Density Peer Range (Percentile)",
-              columns: [
-                { label: "25th", value: formatCurrency(hybrid_opex_p25) },
-                { label: "50th", value: formatCurrency(hybrid_opex_p50) },
-                { label: "75th", value: formatCurrency(hybrid_opex_p75) },
-              ],
-            }}
-          />
-          <MetricRow
-            label="Occupancy Cost / Member"
-            value={formatCurrency(occupancy_per_member)}
-            benchmarks={formatCurrency(hybrid_occupancy_p50)}
-            benchmarkLabel="High-digital-density peer median"
-          />
         </Section>
 
         {/* Revenue */}
@@ -405,20 +369,6 @@ export default function InstitutionProfileCard({ institution, institutions = [],
             />
           )}
 
-          {/* Scenario B cannibalization drag */}
-          {(() => {
-            const y1 = ctx.cannibDragBps_year1;
-            const st = ctx.cannibDragBps_steady;
-            const status = y1 < 3 ? "green" : y1 < 8 ? "amber" : "red";
-            return (
-              <ContextBlock
-                label="Scenario B Cannibalization Drag"
-                value={`~${y1} bps → ${st} bps`}
-                status={status}
-                description={`Estimated ROA compression in Year 1 (at initial rate premium), declining to steady state as the premium decays. Applies to the institution's existing deposits, which are approximated as 80% of total assets — the typical credit union deposit-to-asset ratio, since deposits aren't reported as a separate field in NCUA call data. A floor cost independent of new-member acquisition pace; rises with the rate premium in Advanced Settings.`}
-              />
-            );
-          })()}
         </Section>
       </div>
 

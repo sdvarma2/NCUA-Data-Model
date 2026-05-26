@@ -111,43 +111,6 @@ describe("InstitutionProfileCard", () => {
     });
   });
 
-  describe("operating costs section", () => {
-    it("renders title-cased metric labels", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("Total Operating Cost / Member")).toBeInTheDocument();
-      expect(screen.getByText("Occupancy Cost / Member")).toBeInTheDocument();
-    });
-
-    it("renders opex per member", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("$653")).toBeInTheDocument();
-    });
-
-    it("renders the hybrid opex benchmark values", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("$317")).toBeInTheDocument(); // p25
-      expect(screen.getByText("$430")).toBeInTheDocument(); // p50
-      expect(screen.getByText("$582")).toBeInTheDocument(); // p75
-    });
-
-    it("renders the peer-range band label below opex", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("High-Digital-Density Peer Range (Percentile)")).toBeInTheDocument();
-    });
-
-    it("renders 25th, 50th, 75th percentile column labels in the opex band", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("25th")).toBeInTheDocument();
-      expect(screen.getByText("50th")).toBeInTheDocument();
-      expect(screen.getByText("75th")).toBeInTheDocument();
-    });
-
-    it("renders occupancy per member", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("$32")).toBeInTheDocument();
-    });
-  });
-
   describe("revenue section", () => {
     it("renders title-cased metric labels", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
@@ -181,17 +144,6 @@ describe("InstitutionProfileCard", () => {
       render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
       // BRANCH_HEAVY: NIM=2.553, ROA=1.305, spread≈1.0% → ~$23k
       expect(screen.getByText(/^~\$\d+(\.\d)?k$/)).toBeInTheDocument();
-    });
-
-    it("renders the Scenario B cannibalization drag label", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      expect(screen.getByText("Scenario B Cannibalization Drag")).toBeInTheDocument();
-    });
-
-    it("renders the cannib drag value in bps format", () => {
-      render(<InstitutionProfileCard institution={BRANCH_HEAVY} />);
-      // Default: ~2 bps → 1 bps
-      expect(screen.getByText(/\d+(\.\d)? bps → \d+(\.\d)? bps/)).toBeInTheDocument();
     });
 
     it("shows a green break-even for HYBRID (high NIM, low ROA)", () => {

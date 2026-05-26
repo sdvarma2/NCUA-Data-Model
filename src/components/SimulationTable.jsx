@@ -116,7 +116,7 @@ const FOOTPRINT_TOOLTIP = (
       In the All Markets scenario, adoption is modeled as two independent streams with different economics.
     </span>
     <span className="block mb-1">
-      <span className="font-semibold text-zinc-200">Expansion</span> targets households outside the credit union's current membership — net-new relationships in markets where the institution has no prior presence. Acquisition costs are higher and early attrition is greater because no existing trust has been established.
+      <span className="font-semibold text-zinc-200">Expansion</span> targets potential members outside the credit union's current membership — net-new relationships in markets where the institution has no prior presence. Acquisition costs are higher and early attrition is greater because no existing trust has been established.
     </span>
     <span className="block mb-2">
       <span className="font-semibold text-zinc-200">Footprint (this line)</span> targets the credit union's existing members — converting them to the digital-only product. The relationship already exists, so acquisition costs are substantially lower (cross-sell vs. new-market advertising) and attrition is reduced.
@@ -239,7 +239,7 @@ export default function SimulationTable({ simulationA, simulationB, scenario }) 
                 Cumul. Acq. Spend
               </th>
               <th scope="col" className="text-right font-semibold text-zinc-500 pb-2 px-3 whitespace-nowrap">
-                Monthly NII
+                Monthly Interest Inc.
               </th>
               <th scope="col" className="text-right font-semibold text-zinc-500 pb-2 px-3 whitespace-nowrap">
                 Rate Premium

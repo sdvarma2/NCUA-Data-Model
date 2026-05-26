@@ -51,8 +51,8 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.m36Target).toBe(6900);
     expect(DEFAULT_INPUTS.m60Target).toBe(15000);
     expect(DEFAULT_INPUTS.initialCPA).toBe(450);
-    expect(DEFAULT_INPUTS.steadyStateCPA).toBe(75);
-    expect(DEFAULT_INPUTS.monthsToSteadyState).toBe(24);
+    expect(DEFAULT_INPUTS.steadyStateCPA).toBe(225);   // updated: floor rarely reached in 5yr window
+    expect(DEFAULT_INPUTS.monthsToSteadyState).toBe(60); // updated: full planning horizon
   });
 
   it("has expected deposit defaults", () => {
@@ -110,11 +110,29 @@ describe("MARKET_COMPETITIVENESS_PRESETS", () => {
     );
   });
 
+  it("High competition has a higher steadyStateCPA floor than Low (harder market = weaker network effects)", () => {
+    expect(MARKET_COMPETITIVENESS_PRESETS.High.steadyStateCPA).toBeGreaterThan(
+      MARKET_COMPETITIVENESS_PRESETS.Low.steadyStateCPA
+    );
+  });
+
+  it("all presets use monthsToSteadyState of 60 (floor not reached within planning window)", () => {
+    for (const preset of Object.values(MARKET_COMPETITIVENESS_PRESETS)) {
+      expect(preset.monthsToSteadyState).toBe(60);
+    }
+  });
+
   it("Medium preset matches DEFAULT_INPUTS CPA economics", () => {
     const med = MARKET_COMPETITIVENESS_PRESETS.Medium;
     expect(med.initialCPA).toBe(DEFAULT_INPUTS.initialCPA);
     expect(med.steadyStateCPA).toBe(DEFAULT_INPUTS.steadyStateCPA);
     expect(med.monthsToSteadyState).toBe(DEFAULT_INPUTS.monthsToSteadyState);
+  });
+
+  it("correct calibrated steady-state floors (higher competition = higher floor)", () => {
+    expect(MARKET_COMPETITIVENESS_PRESETS.Low.steadyStateCPA).toBe(175);
+    expect(MARKET_COMPETITIVENESS_PRESETS.Medium.steadyStateCPA).toBe(225);
+    expect(MARKET_COMPETITIVENESS_PRESETS.High.steadyStateCPA).toBe(275);
   });
 });
 
@@ -201,10 +219,12 @@ describe("computeCPA", () => {
     expect(cpa).toBeGreaterThan(DEFAULT_INPUTS.initialCPA * 0.9);
   });
 
-  it("at monthsToSteadyState (inflection+half), CPA is close to steadyStateCPA", () => {
-    const cpa = computeCPA(DEFAULT_INPUTS.monthsToSteadyState, DEFAULT_INPUTS);
-    expect(cpa).toBeLessThan(DEFAULT_INPUTS.initialCPA * 0.5);
+  it("at monthsToSteadyState, CPA has almost fully decayed to steadyStateCPA (within 5% of range)", () => {
+    const cpa   = computeCPA(DEFAULT_INPUTS.monthsToSteadyState, DEFAULT_INPUTS);
+    const range = DEFAULT_INPUTS.initialCPA - DEFAULT_INPUTS.steadyStateCPA;
+    // logistic at t = monthsToSteadyState is ~98.2% decayed — remaining gap < 5% of full range
     expect(cpa).toBeGreaterThan(DEFAULT_INPUTS.steadyStateCPA);
+    expect(cpa - DEFAULT_INPUTS.steadyStateCPA).toBeLessThan(range * 0.05);
   });
 
   it("CPA decreases monotonically over time", () => {

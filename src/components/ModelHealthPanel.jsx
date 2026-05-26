@@ -1,6 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import { computeModelHealth } from "@/lib/model";
+
+// ── Info tooltip (same pattern as AdvancedSettings) ───────────────────────────
+
+function InfoTip({ children, className = "w-64" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1">
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        aria-label="More information"
+        className="rounded-full text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400 transition-colors flex items-center justify-center w-4 h-4"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
+          <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3 py-2.5 text-xs leading-relaxed text-white shadow-lg ${className}`}
+        >
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
@@ -35,12 +68,16 @@ function StatusDot({ status }) {
 
 /**
  * A single metric row: label | • value  hint
+ * Pass `tooltip` to show an ⓘ info icon next to the label.
  */
-function HealthRow({ label, value, status = "neutral", hint }) {
+function HealthRow({ label, value, status = "neutral", hint, tooltip, tooltipClassName }) {
   const valueClass = STATUS_CLASSES[status]?.value ?? STATUS_CLASSES.neutral.value;
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-zinc-100 last:border-0">
-      <span className="text-sm text-zinc-600 leading-snug">{label}</span>
+      <span className="text-sm text-zinc-600 leading-snug flex items-center">
+        {label}
+        {tooltip && <InfoTip className={tooltipClassName ?? "w-72 max-w-[calc(100vw-2rem)]"}>{tooltip}</InfoTip>}
+      </span>
       <div className="flex items-center gap-2 shrink-0">
         {status !== "neutral" && <StatusDot status={status} />}
         <span className={`text-sm font-medium tabular-nums ${valueClass}`}>
@@ -133,7 +170,7 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
   const netLabel = `${netSign}$${Math.round(h.netPerMemberYr)}/yr`;
 
   const cannibLabel = h.cannibDragAsPctOfNII != null
-    ? `${fmtDollars(h.annualCannibDragScenarioB)} (${fmtPct(h.cannibDragAsPctOfNII)} of NII)`
+    ? `${fmtDollars(h.annualCannibDragScenarioB)} (${fmtPct(h.cannibDragAsPctOfNII)} of interest income)`
     : fmtDollars(h.annualCannibDragScenarioB);
 
   return (
@@ -146,9 +183,9 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Model Health
         </h2>
-        <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
-          Derived instrument values — verify inputs are producing a plausible
-          model before running the simulation.
+        <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
+          Use this panel to verify that the inputs provided are producing a
+          plausible model before running the simulation.
         </p>
       </div>
 
@@ -167,12 +204,14 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           value={`$${Math.round(h.servicingSavingsPerMemberYr)}`}
           status={savingsStatus}
           hint="target $90–150"
+          tooltip="Annual reduction in per-member operating cost for a digital member vs. a branch member. Computed as branch servicing cost minus digital servicing cost, covering transactions, platform fees, branch visit subsidies, and attrition-amortized acquisition cost."
         />
         <HealthRow
           label="Rate Premium Cost"
           value={`$${Math.round(h.ratePremiumPerMemberYr)}`}
           status="neutral"
           hint="deposit + loan"
+          tooltip="Annualized rate concessions paid to digital members — the higher deposit rate plus the lower loan rate, weighted by deposit balance and loan penetration rate. Decreases over time as the rate bump decays toward the floor setting."
         />
         <HealthRow
           label="Net (Savings − Premium)"
@@ -193,9 +232,10 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
       />
       <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 px-4 mb-4">
         <HealthRow
-          label="Gross NII"
+          label="Gross Interest Income"
           value={`$${Math.round(h.monthlyNIIper1000).toLocaleString()}`}
           status="neutral"
+          tooltip="Estimated gross interest income earned on digital member deposit and loan balances per 1,000 members per month, using the institution's NIM as the earning rate. This is the raw interest spread before subtracting the rate premium concession."
         />
         <HealthRow
           label="Rate Premium Cost"
@@ -203,10 +243,12 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           status="neutral"
         />
         <HealthRow
-          label="NII Coverage Ratio"
+          label="Interest Income Coverage Ratio"
           value={h.niiCoverageRatio == null ? "—" : `${h.niiCoverageRatio.toFixed(1)}×`}
           status={coverageStatus}
           hint="target > 3×"
+          tooltip="Gross interest income divided by rate premium cost — how many times does the interest earned on digital balances cover the rate concession paid out. A ratio above 3× means the NIM comfortably absorbs the premium and still leaves meaningful spread. Below 1.5× the program earns less interest than it gives away in rate concessions."
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
         />
       </div>
 
@@ -223,6 +265,8 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
               value={cannibLabel}
               status={cannibStatus}
               hint="target < 5%"
+              tooltip="First-year estimate of net interest income erosion as rate-sensitive existing members migrate from standard to digital-tier rates under Scenario B (All Markets). Expressed as a total dollar impact and as a percentage of the institution's current annual gross interest income. Above 10% represents material balance-sheet risk."
+              tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
             />
           </div>
         </>

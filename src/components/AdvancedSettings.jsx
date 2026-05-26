@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, MARKET_COMPETITIVENESS_PRESETS, suggestMilestones } from "@/lib/model";
+import ModelHealthPanel from "@/components/ModelHealthPanel";
 
 // ── Info tooltip ─────────────────────────────────────────────────────────────
 
@@ -267,12 +268,12 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
         <NumberField
           fieldKey="tam"
           label="Total Addressable Market (TAM)"
-          unit="households"
+          unit="potential members"
           scale={1} precision={0} step={50000} min={50000} max={5000000}
           value={inputs.tam}
           onChange={onChange}
           tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
-          tooltip="The total number of households in your target geography — everyone you could theoretically serve, before filtering for creditworthiness or product fit. Use MSA or county-level household counts from Census data. Setting this too broadly inflates SAM and produces over-optimistic member projections; scope it to your actual launch market."
+          tooltip="The total number of potential members in your target geography — every adult you could theoretically serve, before filtering for creditworthiness or product fit. If sourcing from census or FFIEC household data, multiply household counts by ~1.5–1.6 to convert to adults. Setting this too broadly inflates SAM and produces over-optimistic member projections; scope it to your actual launch market."
         />
         <NumberField
           fieldKey="samPct"
@@ -281,13 +282,13 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           scale={1} precision={0} step={5} min={5} max={100}
           value={inputs.samPct}
           onChange={onChange}
-          tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, creditworthy, etc. This is who you can actually convert."
+          tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, and creditworthy — the potential members you can actually convert."
           tooltipClassName="w-64"
         />
         <DerivedField
-          label="SAM # of Households"
+          label="SAM (Potential Members)"
           value={sam.toLocaleString()}
-          unit="households"
+          unit="potential members"
         />
 
         {/* ── Membership Milestones ──────────────────────────────── */}
@@ -380,7 +381,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           tooltip={
             <>
               <p className="mb-2">
-                This is the cost to acquire an active household (with funded accounts and
+                This is the cost to acquire an active member (with funded accounts and
                 consistent usage). The cost to acquire an active member will be higher than the cost
                 of acquisition overall because, especially for digital users, a significant number
                 will join but not fund accounts.
@@ -402,9 +403,9 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
               </p>
               <p>
                 When setting this number, also consider who you are trying to acquire. High Net Worth
-                households make up a small portion of any addressable market, and they are much harder
+                members make up a small portion of any addressable market, and they are much harder
                 to move. Consider significantly increasing Initial CPA and Steady-State CPA if you are
-                targeting High Net Worth households.
+                targeting High Net Worth members.
               </p>
             </>
           }
@@ -417,7 +418,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           value={inputs.steadyStateCPA}
           onChange={onChange}
           tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
-          tooltip="The cost per active member at maturity, once organic channels — referrals, word-of-mouth, and app-store discovery — are driving most acquisition. At steady state the credit union is paying for conversion of already-aware prospects, not brand introduction. Cornerstone/CUES data shows mature credit union digital CAC of $50–100 per funded account. CPA decays from Initial to Steady-State along a logistic curve over the number of months set below."
+          tooltip="The theoretical CPA floor at full maturity — once referrals, word-of-mouth, and organic discovery dominate acquisition. In practice, most new-market CU programs do not approach this floor within a 5-year window; the logistic decay curve will still be well above steady state at Month 60. Benchmarks from SoFi, Ally, and Cornerstone suggest even established digital brands with years of scale remain at $150–250+ per funded account. Set this conservatively — the model will show the realistic cost trajectory rather than an optimistic floor."
         />
         <NumberField
           fieldKey="monthsToSteadyState"
@@ -427,7 +428,7 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           value={inputs.monthsToSteadyState}
           onChange={onChange}
           tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
-          tooltip="How long the CPA decay curve takes to travel from Initial CPA to Steady-State CPA. The model uses a logistic (S-curve) shape — CPA falls slowly at first, accelerates mid-program, then flattens near steady state. At 24 months, CPA is ~95% of the way to steady state. Use a longer horizon for markets where brand-building is slow (rural markets, highly competitive metros); shorter if the credit union already has strong recognition or an active SEG relationship in the target area."
+          tooltip="How long the CPA decay curve takes to travel from Initial CPA to Steady-State CPA. The model uses a logistic (S-curve) shape — CPA falls slowly at first, accelerates mid-program, then flattens near steady state. At monthsToSteadyState, CPA is ~98% of the way to the floor. Setting this to 60 means the curve barely reaches steady state within the planning window — a realistic default for new-market programs where brand-building takes a decade or more to fully mature."
         />
 
       </div>
@@ -595,7 +596,7 @@ const SECTIONS = [
         tooltip: (
           <>
             <p className="mb-2">
-              The average number of teller interactions per digital member per month. The default of 0.333 equals 4 teller visits per year — consistent with the Federal Reserve&rsquo;s &ldquo;How America Banks&rdquo; survey finding that even digital-primary households average 3–5 branch visits annually for complex needs (loan closings, disputes, large-value transactions).
+              The average number of teller interactions per digital member per month. The default of 0.333 equals 4 teller visits per year — consistent with the Federal Reserve&rsquo;s &ldquo;How America Banks&rdquo; survey finding that even digital-primary members average 3–5 branch visits annually for complex needs (loan closings, disputes, large-value transactions).
             </p>
             <p>
               Adjust down if the digital product has no branch access; adjust up if your members are known to be branch-reliant. This drives the teller transaction cost on digital members&rsquo; side of the servicing savings calculation.
@@ -775,7 +776,7 @@ const FOOTPRINT_SECTIONS = [
 
 // ── Top-level component ───────────────────────────────────────────────────────
 
-export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
+export default function AdvancedSettings({ inputs, onChange, onBatchChange, footprintInputs, scenario, institution }) {
   const [open, setOpen] = useState(false);
 
   function handleReset() {
@@ -850,6 +851,16 @@ export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
               Reset all to defaults
             </button>
           </div>
+
+          {/* Model Health — visible here so it's only seen when settings are open */}
+          {institution && (
+            <ModelHealthPanel
+              inputs={inputs}
+              footprintInputs={footprintInputs ?? inputs}
+              scenario={scenario ?? "scenario_a"}
+              institution={institution}
+            />
+          )}
         </div>
       )}
     </div>
@@ -949,7 +960,7 @@ export function FootprintSettings({ inputs, marketing, onMarketingChange, onChan
               <NumberField
                 fieldKey="tam"
                 label="Total Addressable Market (TAM)"
-                unit="households"
+                unit="potential members"
                 scale={1} precision={0} step={10000} min={10000} max={5000000}
                 value={inputs.tam}
                 onChange={onChange}
@@ -961,9 +972,9 @@ export function FootprintSettings({ inputs, marketing, onMarketingChange, onChan
                 scale={1} precision={0} step={5} min={5} max={100}
                 value={inputs.samPct}
                 onChange={onChange}
-                tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, creditworthy, etc. This is who you can actually convert."
+                tooltip="SAM refers to the portion of the addressable market that is eligible for your products, reachable, and creditworthy — the potential members you can actually convert."
               />
-              <DerivedField label="SAM # of Households" value={sam.toLocaleString()} unit="households" />
+              <DerivedField label="SAM (Potential Members)" value={sam.toLocaleString()} unit="potential members" />
 
               <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
                 Membership Milestones (net active members)
