@@ -42,7 +42,7 @@ function IntroSection() {
           <p>
             Imagine the CEO of your institution, a credit union, has just given you a stretch
             assignment. The organization is considering an expansion strategy that involves
-            launching a digital-only membership to grow the credit union&rsquo;s membership
+            launching a digital-only membership to grow the credit union
             without diluting ROA. You&rsquo;ve been given one week to come back with a
             presentation on the options and trade-offs of this strategy.
           </p>
