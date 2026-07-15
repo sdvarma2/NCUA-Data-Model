@@ -6,6 +6,7 @@ import InstitutionProfileCard from "@/components/InstitutionProfileCard";
 import ScenarioToggle from "@/components/ScenarioToggle";
 import ModelInputs from "@/components/ModelInputs";
 import AdvancedSettings, { FootprintSettings } from "@/components/AdvancedSettings";
+import ModelHealthPanel from "@/components/ModelHealthPanel";
 import SimulationTable from "@/components/SimulationTable";
 import SimulationStage from "@/components/SimulationStage";
 import { runSimulation, DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, suggestMilestones } from "@/lib/model";
@@ -40,10 +41,10 @@ function IntroSection() {
       {open && (
         <div className="rounded-lg border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-600 leading-relaxed space-y-3 max-w-2xl">
           <p>
-            Imagine the CEO of your institution, a credit union, has just given you a stretch
-            assignment. The organization is considering an expansion strategy that involves
-            launching a digital-only membership to grow the credit union
-            without diluting ROA. You&rsquo;ve been given one week to come back with a
+            Imagine the CEO of your institution, a credit union, has tasked you with growing membership by 10%
+            in the next 5 years. You&rsquo;ve decided to evaluate the option of
+            launching a digital-only membership to grow the credit union 
+            without diluting ROA. You have one week to come back with a
             presentation on the options and trade-offs of this strategy.
           </p>
           <p>
@@ -119,23 +120,6 @@ export default function Home() {
           const suggested   = suggestMilestones(mergedInputs);
           return { ...prev, tam: newTam, ...suggested };
         });
-      }
-    }
-
-    // Rate Competitiveness sets deposit/loan rate fields — no milestone re-suggestion needed.
-    if (id === "rateCompetitiveness") {
-      const preset = LEVER_PRESETS.rateCompetitiveness[value];
-      if (preset) {
-        setAdvancedOverrides((prev) => ({ ...prev, ...preset }));
-      }
-    }
-
-    // Acquisition Aggression sets CPA economics only — no milestone re-suggestion needed
-    // because CPA is a pure cost overlay and doesn't affect Bass curve calibration.
-    if (id === "acquisitionAggression") {
-      const preset = LEVER_PRESETS.acquisitionAggression[value];
-      if (preset) {
-        setAdvancedOverrides((prev) => ({ ...prev, ...preset }));
       }
     }
 
@@ -236,14 +220,24 @@ export default function Home() {
 
                 <section className="space-y-6">
                   <ScenarioToggle scenario={scenario} onChange={setScenario} />
-                  <ModelInputs levers={levers} onChange={handleLeverChange} />
+                  <ModelInputs
+                    levers={levers}
+                    onChange={handleLeverChange}
+                    onInputChange={handleAdvancedChange}
+                    onBatchInputChange={handleAdvancedBatchChange}
+                    inputs={inputs}
+                    calibration={simulationA?.calibration}
+                  />
+                  <ModelHealthPanel
+                    inputs={inputs}
+                    footprintInputs={footprintInputs}
+                    scenario={scenario}
+                    institution={selected}
+                  />
                   <AdvancedSettings
                     inputs={inputs}
                     onChange={handleAdvancedChange}
                     onBatchChange={handleAdvancedBatchChange}
-                    footprintInputs={footprintInputs}
-                    scenario={scenario}
-                    institution={selected}
                   />
                   {scenario === "scenario_b" && (
                     <FootprintSettings

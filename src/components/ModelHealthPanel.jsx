@@ -1,12 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { computeModelHealth } from "@/lib/model";
 
 // ── Info tooltip (same pattern as AdvancedSettings) ───────────────────────────
 
 function InfoTip({ children, className = "w-64" }) {
   const [open, setOpen] = useState(false);
+  const [offsetX, setOffsetX] = useState(0);
+  const tipRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setOffsetX(0);
+      return;
+    }
+    if (!tipRef.current) return;
+    const margin = 16;
+    const viewportWidth = document.documentElement.clientWidth;
+    const rect = tipRef.current.getBoundingClientRect();
+    // rect reflects the untransformed position on first paint since offsetX resets to 0 on close
+    let next = 0;
+    if (rect.right > viewportWidth - margin) {
+      next = viewportWidth - margin - rect.right;
+    }
+    if (rect.left + next < margin) {
+      next = margin - rect.left;
+    }
+    setOffsetX(next);
+  }, [open]);
+
   return (
     <span className="relative inline-flex items-center ml-1">
       <button
@@ -25,7 +48,9 @@ function InfoTip({ children, className = "w-64" }) {
       </button>
       {open && (
         <span
+          ref={tipRef}
           role="tooltip"
+          style={{ transform: offsetX ? `translateX(${offsetX}px)` : undefined }}
           className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3 py-2.5 text-xs leading-relaxed text-white shadow-lg ${className}`}
         >
           {children}

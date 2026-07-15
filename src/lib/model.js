@@ -16,7 +16,7 @@ export const DEFAULT_INPUTS = {
 
   // Acquisition — CPA Economics (logistic decay curve)
   initialCPA: 450,           // $/active member, early market; Cornerstone: new-market CU CAC $200–400; expansion at/above top of range
-  steadyStateCPA: 225,       // $/active member; floor rarely reached in 5yr window — see Acquisition Aggression lever
+  steadyStateCPA: 225,       // $/active member; floor rarely reached in 5yr window — see Acquisition Cost Profile lever
   monthsToSteadyState: 60,   // months; network effects take longer than one planning cycle for new-market CUs
 
   // Deposits
@@ -51,6 +51,17 @@ export const DEFAULT_INPUTS = {
   // Retention
   digitalAttritionYear1: 0.18,        // 18%/yr during first 12 program months
   digitalAttritionSteadyState: 0.07,  // 7%/yr after month 12
+
+  // Rate Incentives — q (word-of-mouth) and attrition are direct behavioral
+  // consequences of the rate story and are multiplied against baseline.
+  // Conservative (0.65×/0.60×): quieter organic spread, but stickier members
+  // Moderate (1.0×): baseline — no adjustment
+  // Aggressive (1.55×/1.60×): stronger word-of-mouth, but "hot money" churn
+  // p (paid/outbound acquisition intensity) is NOT a multiplier — it is
+  // solved in calibrateAcquisition() to hold the Month 60 goal fixed under
+  // whatever rate posture is selected. See calibrateAcquisition for why.
+  qMultiplier: 1.0,
+  attritionMultiplier: 1.0,
 };
 
 /**
@@ -91,6 +102,11 @@ export const DEFAULT_FOOTPRINT_INPUTS = {
   // Retention — established relationships are stickier
   digitalAttritionYear1: 0.10,
   digitalAttritionSteadyState: 0.05,
+
+  // Rate Incentives multipliers — always 1.0 for the footprint stream; rate
+  // incentive dynamics are modelled on the expansion market only.
+  qMultiplier: 1.0,
+  attritionMultiplier: 1.0,
 };
 
 /** Market Competitiveness presets — applied immediately when the toggle changes. */
@@ -222,6 +238,41 @@ function nelderMead2D(f, x0, bounds, maxIter = 500) {
   return simplex[0]; // [p, q] at best found point
 }
 
+// ── Bounded 1-D solve for p ───────────────────────────────────────────────────
+
+/**
+ * Solves for the innovation coefficient p that makes the Bass curve's Month 60
+ * net-active total hit m60Target exactly, holding q, sam, and attrition fixed.
+ *
+ * a60(p) is monotonically increasing in p for fixed q (more outbound reach
+ * never decreases adoption), so bisection is well-behaved. If the target is
+ * unreachable within [pMin, pMax] the search clamps to the nearer bound —
+ * the caller's residual-vs-target check is what surfaces that as "implausible."
+ *
+ * @param {number} q               Fixed imitation coefficient
+ * @param {number} sam             Serviceable addressable market
+ * @param {object} effectiveInputs Rate-incentive-adjusted attrition inputs
+ * @param {number} m60Target       Month 60 net-active goal to solve for
+ * @param {number[]} [bounds]      [pMin, pMax] search bounds
+ * @returns {number} p
+ */
+function solvePForTarget(q, sam, effectiveInputs, m60Target, bounds = [0.001, 0.05]) {
+  const [pMin, pMax] = bounds;
+  const a60At = (p) => simulateNetActiveAll(computeBassCurve(p, q, sam), effectiveInputs).a60;
+
+  const aAtMin = a60At(pMin);
+  const aAtMax = a60At(pMax);
+  if (m60Target <= aAtMin) return pMin; // even minimum outbound reach meets or exceeds the goal
+  if (m60Target >= aAtMax) return pMax; // even maximum outbound reach can't reach the goal
+
+  let lo = pMin, hi = pMax;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (a60At(mid) < m60Target) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 // ── Realism assessment ────────────────────────────────────────────────────────
 
 /**
@@ -268,21 +319,95 @@ function assessRealism(p, q, residuals) {
   };
 }
 
+/**
+ * Assesses whether the CURRENT rate posture can still reach the Month 60 goal.
+ *
+ * Unlike assessRealism (which fits p AND q to all three milestones via the
+ * WLS optimizer), Rate Incentives only solves p against the Month 60 target —
+ * q is a direct multiplier and M12/M36 are whatever the resulting curve shape
+ * happens to produce, not independently targeted. Judging Rate Fit against
+ * M12/M36 residuals therefore measures the wrong thing: a rate posture that
+ * reshapes the curve (e.g. Aggressive's back-loaded, word-of-mouth-heavy
+ * shape) can undershoot M12 substantially while still landing exactly on the
+ * Month 60 goal — that's a genuine trajectory difference, not evidence the
+ * goal is unreachable, and shouldn't read as "Implausible."
+ *
+ * Tension here is scoped to the Month 60 residual alone, since that's the
+ * only thing p is solved against. A meaningful underprediction only happens
+ * when p saturates at its search bound and still falls short — the correct
+ * "this rate posture can't reach the goal" signal.
+ */
+function assessRateFit(p, q, m60Residual) {
+  const pStatus = p >= 0.003 && p <= 0.020 ? "green" : p <= 0.040 ? "yellow" : "red";
+  const qStatus = q >= 0.15  && q <= 0.45  ? "green" : q <= 0.65  ? "yellow" : "red";
+  const paramStatus =
+      [pStatus, qStatus].includes("red")    ? "red"
+    : [pStatus, qStatus].includes("yellow") ? "yellow"
+    : "green";
+
+  const underPrediction = Math.max(0, -m60Residual);
+  const tensionStatus = underPrediction < 0.02 ? "green" : underPrediction < 0.10 ? "yellow" : "red";
+
+  const overall =
+      [paramStatus, tensionStatus].includes("red")    ? "red"
+    : [paramStatus, tensionStatus].includes("yellow") ? "yellow"
+    : "green";
+
+  return { overall, paramStatus, pStatus, qStatus, tensionStatus, m60Residual };
+}
+
+/**
+ * Rounds a milestone value to a scale-appropriate increment so it reads as a
+ * plausible planning number rather than raw simulation output. Finer rounding
+ * for small numbers (m12 is always small) prevents artificial inflation.
+ */
+function roundByMagnitude(n) {
+  if (n <  2_000) return Math.max( 50, Math.round(n /  50) *  50);
+  if (n < 10_000) return Math.max(100, Math.round(n / 100) * 100);
+  if (n < 50_000) return Math.max(500, Math.round(n / 500) * 500);
+  return Math.max(1_000, Math.round(n / 1_000) * 1_000);
+}
+
 // ── Exported acquisition functions ────────────────────────────────────────────
 
 /**
- * Calibrates Bass model parameters (p, q) to the user's milestone targets using
- * weighted least squares optimization (Nelder-Mead).
+ * Calibrates Bass model parameters (p, q) to the user's milestone targets, then
+ * applies Rate Incentives.
  *
- * Objective weights: M60 = 3 (primary planning horizon), M36 = 2, M12 = 1.
- * Search space: p ∈ [0.001, 0.05], q ∈ [0.05, 0.80].
+ * Two-stage design:
+ *
+ * 1. Baseline fit (Nelder-Mead WLS, weights M60=3/M36=2/M12=1, search space
+ *    p ∈ [0.001, 0.05], q ∈ [0.05, 0.80]) at Moderate rate assumptions — this
+ *    is the "Market & Goal" achievability signal (realismIndicator below),
+ *    stable regardless of whatever Rate Incentives posture is later selected.
+ *
+ * 2. Rate Incentives are applied by holding the Month 60 goal FIXED and
+ *    solving for the acquisition mix that reaches it under that rate story:
+ *      - q (word-of-mouth) and attrition are direct behavioral consequences
+ *        of the rate story — multiplied directly against baseline.
+ *      - p (paid/outbound acquisition intensity) is SOLVED (see
+ *        solvePForTarget) rather than multiplied, because p is the one
+ *        marketing-spend-elastic lever: a worse rate story means p has to
+ *        rise to compensate, a better one means it can fall. This keeps the
+ *        stated goal from silently drifting just because a pricing lever
+ *        moved — a worse rate story costs more effort to reach the same
+ *        goal, it doesn't just produce fewer members.
+ *    rateFitIndicator assesses achievability at THIS specific rate posture —
+ *    e.g. p pinned at its upper bound and still short signals the goal isn't
+ *    reachable at that rate story without unrealistic acquisition intensity.
  *
  * @param {object} inputs  Merged DEFAULT_INPUTS + user overrides
- * @returns {{ p, q, sam, bassGrossCurve, residuals, realismIndicator }}
+ * @returns {{ p, q, pBaseline, qBaseline, sam, bassGrossCurve, effectiveInputs,
+ *   projectedM12, projectedM36, projectedM60, residuals, realismIndicator,
+ *   rateFitIndicator }}
  */
 export function calibrateAcquisition(inputs) {
-  const sam = inputs.tam * (inputs.samPct / 100);
+  const sam      = inputs.tam * (inputs.samPct / 100);
+  const qMult    = inputs.qMultiplier          ?? 1.0;
+  const attrMult = inputs.attritionMultiplier  ?? 1.0;
 
+  // ── Step 1: calibrate baseline p/q to hit stated milestones at Moderate
+  // rate assumptions — the Market & Goal achievability baseline.
   function loss(p, q) {
     const curve = computeBassCurve(p, q, sam);
     const { a12, a36, a60 } = simulateNetActiveAll(curve, inputs);
@@ -293,17 +418,50 @@ export function calibrateAcquisition(inputs) {
     );
   }
 
-  const [p, q] = nelderMead2D(loss, [0.01, 0.30], [[0.001, 0.05], [0.05, 0.80]]);
+  const [pBaseline, qBaseline] = nelderMead2D(loss, [0.01, 0.30], [[0.001, 0.05], [0.05, 0.80]]);
+
+  const baselineCurve = computeBassCurve(pBaseline, qBaseline, sam);
+  const { a12: baseA12, a36: baseA36, a60: baseA60 } = simulateNetActiveAll(baselineCurve, inputs);
+  const baselineResiduals = {
+    12: inputs.m12Target > 0 ? (baseA12 - inputs.m12Target) / inputs.m12Target : 0,
+    36: inputs.m36Target > 0 ? (baseA36 - inputs.m36Target) / inputs.m36Target : 0,
+    60: inputs.m60Target > 0 ? (baseA60 - inputs.m60Target) / inputs.m60Target : 0,
+  };
+  const realismIndicator = assessRealism(pBaseline, qBaseline, baselineResiduals);
+
+  // ── Step 2: apply Rate Incentives — q/attrition multiplied directly,
+  // p solved to hold the Month 60 goal fixed.
+  const q = Math.min(0.80, Math.max(0.05, qBaseline * qMult));
+  const effectiveInputs = {
+    ...inputs,
+    digitalAttritionYear1:       Math.min(0.99, inputs.digitalAttritionYear1       * attrMult),
+    digitalAttritionSteadyState: Math.min(0.99, inputs.digitalAttritionSteadyState * attrMult),
+  };
+  const p = solvePForTarget(q, sam, effectiveInputs, inputs.m60Target);
+
   const bassGrossCurve = computeBassCurve(p, q, sam);
-  const { a12, a36, a60 } = simulateNetActiveAll(bassGrossCurve, inputs);
+  const { a12: projM12, a36: projM36, a60: projM60 } =
+    simulateNetActiveAll(bassGrossCurve, effectiveInputs);
 
   const residuals = {
-    12: inputs.m12Target > 0 ? (a12 - inputs.m12Target) / inputs.m12Target : 0,
-    36: inputs.m36Target > 0 ? (a36 - inputs.m36Target) / inputs.m36Target : 0,
-    60: inputs.m60Target > 0 ? (a60 - inputs.m60Target) / inputs.m60Target : 0,
+    12: inputs.m12Target > 0 ? (projM12 - inputs.m12Target) / inputs.m12Target : 0,
+    36: inputs.m36Target > 0 ? (projM36 - inputs.m36Target) / inputs.m36Target : 0,
+    60: inputs.m60Target > 0 ? (projM60 - inputs.m60Target) / inputs.m60Target : 0,
   };
 
-  return { p, q, sam, bassGrossCurve, residuals, realismIndicator: assessRealism(p, q, residuals) };
+  return {
+    pBaseline, qBaseline,
+    p, q,
+    sam,
+    bassGrossCurve,
+    effectiveInputs,
+    projectedM12: Math.round(projM12),
+    projectedM36: Math.round(projM36),
+    projectedM60: Math.round(projM60),
+    residuals,
+    realismIndicator,                                        // Market & Goal — achievability at Moderate rates
+    rateFitIndicator: assessRateFit(p, q, residuals[60]),     // Rate Incentives — Month 60 achievability at the current rate posture
+  };
 }
 
 /**
@@ -317,6 +475,26 @@ export function computeCPA(month, inputs) {
     inputs.steadyStateCPA +
     (inputs.initialCPA - inputs.steadyStateCPA) / (1 + Math.exp(k * (month - tMid)))
   );
+}
+
+/**
+ * Total acquisition spend across the 60-month planning window — the sum of
+ * newMembersGross(m) × computeCPA(m) for m = 1..60, using the calibrated Bass
+ * curve and CPA settings. Mirrors the per-month spend calculation in
+ * runStream()/runSimulation() so this total matches what the simulation
+ * actually spends, without needing to run the full 60-month simulation loop.
+ *
+ * @param {object} calibration  Result of calibrateAcquisition() — reads
+ *                               bassGrossCurve and effectiveInputs
+ * @returns {number} Total acquisition spend in dollars over 60 months
+ */
+export function computeCumulativeAcquisitionSpend(calibration) {
+  const { bassGrossCurve, effectiveInputs } = calibration;
+  let total = 0;
+  for (let m = 1; m <= 60; m++) {
+    total += bassGrossCurve[m - 1] * computeCPA(m, effectiveInputs);
+  }
+  return total;
 }
 
 // ── Economics functions (unchanged) ──────────────────────────────────────────
@@ -412,17 +590,46 @@ export function suggestMilestones(inputs, p = 0.008, q = 0.30) {
   // a small number) gets finer rounding than m36/m60. A uniform SAM-based increment
   // would round m12 to the nearest 500, inflating it by 15–25% and creating
   // artificial tension in the realism indicator.
-  const roundByMagnitude = (n) => {
-    if (n <  2_000) return Math.max( 50, Math.round(n /  50) *  50);
-    if (n < 10_000) return Math.max(100, Math.round(n / 100) * 100);
-    if (n < 50_000) return Math.max(500, Math.round(n / 500) * 500);
-    return Math.max(1_000, Math.round(n / 1_000) * 1_000);
-  };
-
   return {
     m12Target: roundByMagnitude(a12),
     m36Target: roundByMagnitude(a36),
     m60Target: roundByMagnitude(a60),
+  };
+}
+
+/**
+ * Derives Month 12 and Month 36 targets that are proportionally consistent
+ * with a user-specified Month 60 goal, using the same reference Bass shape as
+ * suggestMilestones (p = 0.008, q = 0.30 by default).
+ *
+ * calibrateAcquisition's optimizer fits p/q against all three milestone
+ * targets simultaneously (weighted 3/2/1). If m12Target and m36Target are
+ * left at stale, unrelated values while only m60Target changes, the optimizer
+ * is forced to compromise between mutually inconsistent objectives — this can
+ * produce a curve where m12/m36 projections move in the OPPOSITE direction of
+ * an increased m60Target. Scaling m12/m36 proportionally to the new m60Target
+ * (same reference-curve shape, just rescaled) keeps all three objectives
+ * mutually consistent, so the optimizer converges on a single coherent curve.
+ *
+ * @param {object} inputs      Merged inputs — uses tam, samPct, digitalAttrition*
+ * @param {number} m60Target   The user's new Month 60 goal
+ * @param {number} [p=0.008]   Reference innovation coefficient
+ * @param {number} [q=0.30]    Reference imitation coefficient
+ * @returns {{ m12Target: number, m36Target: number, m60Target: number }}
+ */
+export function deriveMilestonesForM60Target(inputs, m60Target, p = 0.008, q = 0.30) {
+  const sam = inputs.tam * (inputs.samPct / 100);
+  const bassGrossCurve = computeBassCurve(p, q, sam);
+  const { a12, a36, a60 } = simulateNetActiveAll(bassGrossCurve, inputs);
+
+  if (a60 <= 0) {
+    return { m12Target: 0, m36Target: 0, m60Target };
+  }
+
+  return {
+    m12Target: roundByMagnitude(m60Target * (a12 / a60)),
+    m36Target: roundByMagnitude(m60Target * (a36 / a60)),
+    m60Target,
   };
 }
 
@@ -577,7 +784,8 @@ function runStream(institution, inputs, bassGrossCurve) {
 export function runSimulation(institution, inputs, scenario, footprintInputs = null) {
   // ── Expansion market stream ──────────────────────────────────────────────────
   const calibration    = calibrateAcquisition(inputs);
-  const expansionStream = runStream(institution, inputs, calibration.bassGrossCurve);
+  // Use effectiveInputs so runStream applies rate-incentive-adjusted attrition
+  const expansionStream = runStream(institution, calibration.effectiveInputs, calibration.bassGrossCurve);
 
   // ── Optional inside-footprint stream (Scenario B only) ──────────────────────
   const hasFootprint = footprintInputs !== null && scenario === "scenario_b";
@@ -586,7 +794,7 @@ export function runSimulation(institution, inputs, scenario, footprintInputs = n
 
   if (hasFootprint) {
     footprintCalibration = calibrateAcquisition(footprintInputs);
-    footprintStream      = runStream(institution, footprintInputs, footprintCalibration.bassGrossCurve);
+    footprintStream      = runStream(institution, footprintCalibration.effectiveInputs, footprintCalibration.bassGrossCurve);
   }
 
   // ── Blend streams + apply cannibalization once ───────────────────────────────

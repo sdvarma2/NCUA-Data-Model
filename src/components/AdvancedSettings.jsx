@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_INPUTS, DEFAULT_FOOTPRINT_INPUTS, MARKET_COMPETITIVENESS_PRESETS, suggestMilestones } from "@/lib/model";
-import ModelHealthPanel from "@/components/ModelHealthPanel";
 
 // ── Info tooltip ─────────────────────────────────────────────────────────────
 
@@ -17,6 +16,29 @@ import ModelHealthPanel from "@/components/ModelHealthPanel";
  */
 function InfoTip({ children, className = "w-64" }) {
   const [open, setOpen] = useState(false);
+  const [offsetX, setOffsetX] = useState(0);
+  const tipRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setOffsetX(0);
+      return;
+    }
+    if (!tipRef.current) return;
+    const margin = 16;
+    const viewportWidth = document.documentElement.clientWidth;
+    const rect = tipRef.current.getBoundingClientRect();
+    // rect reflects the untransformed position on first paint since offsetX resets to 0 on close
+    let next = 0;
+    if (rect.right > viewportWidth - margin) {
+      next = viewportWidth - margin - rect.right;
+    }
+    if (rect.left + next < margin) {
+      next = margin - rect.left;
+    }
+    setOffsetX(next);
+  }, [open]);
+
   return (
     <span className="relative inline-flex items-center ml-1">
       <button
@@ -35,7 +57,9 @@ function InfoTip({ children, className = "w-64" }) {
       </button>
       {open && (
         <span
+          ref={tipRef}
           role="tooltip"
+          style={{ transform: offsetX ? `translateX(${offsetX}px)` : undefined }}
           className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3 py-2.5 text-xs leading-relaxed text-white shadow-lg ${className}`}
         >
           {children}
@@ -431,6 +455,42 @@ function AcquisitionSection({ inputs, onChange, onBatchChange }) {
           tooltip="How long the CPA decay curve takes to travel from Initial CPA to Steady-State CPA. The model uses a logistic (S-curve) shape — CPA falls slowly at first, accelerates mid-program, then flattens near steady state. At monthsToSteadyState, CPA is ~98% of the way to the floor. Setting this to 60 means the curve barely reaches steady state within the planning window — a realistic default for new-market programs where brand-building takes a decade or more to fully mature."
         />
 
+        {/* ── Bass Diffusion Multiplier ───────────────────────────────── */}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 pt-3 pb-1">
+          Bass Diffusion Multiplier
+        </p>
+
+        <NumberField
+          fieldKey="qMultiplier"
+          label="Word-of-Mouth Rate Multiplier (q)"
+          unit="× baseline"
+          scale={1} precision={2} step={0.05} min={0.1} max={3.0}
+          value={inputs.qMultiplier}
+          onChange={onChange}
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
+          tooltip={
+            <>
+              <p className="mb-2">
+                Scales the Bass diffusion model&rsquo;s <strong>q</strong> (imitation / word-of-mouth) coefficient relative
+                to the calibrated baseline. q governs how fast existing members refer others — the
+                organic, peer-driven spread of the product.
+              </p>
+              <p className="mb-2">
+                At Aggressive rate incentives, q is set to 1.55× because high rates generate strong social
+                signal (&ldquo;my credit union is paying 5%!&rdquo;). At Conservative, 0.65× because lower-rate
+                products spread more quietly through relationship channels.
+              </p>
+              <p className="mb-2">Values above 1.0 accelerate the peak of the Bass curve; below 1.0 push the peak later and lower.</p>
+              <p>
+                There is no equivalent multiplier for <strong>p</strong> (paid/outbound discovery) — p is
+                instead solved to hold your Month 60 goal fixed under whatever rate posture is selected, since
+                p represents the acquisition intensity a marketing budget can actually move. See Rate Incentives
+                for the resulting required acquisition intensity.
+              </p>
+            </>
+          }
+        />
+
       </div>
     </div>
 
@@ -776,7 +836,7 @@ const FOOTPRINT_SECTIONS = [
 
 // ── Top-level component ───────────────────────────────────────────────────────
 
-export default function AdvancedSettings({ inputs, onChange, onBatchChange, footprintInputs, scenario, institution }) {
+export default function AdvancedSettings({ inputs, onChange, onBatchChange }) {
   const [open, setOpen] = useState(false);
 
   function handleReset() {
@@ -785,6 +845,7 @@ export default function AdvancedSettings({ inputs, onChange, onBatchChange, foot
       "marketName", "tam", "samPct",
       "m12Target", "m36Target", "m60Target",
       "initialCPA", "steadyStateCPA", "monthsToSteadyState",
+      "qMultiplier", "attritionMultiplier",
     ];
     for (const key of acquisitionKeys) {
       onChange(key, DEFAULT_INPUTS[key]);
@@ -851,16 +912,6 @@ export default function AdvancedSettings({ inputs, onChange, onBatchChange, foot
               Reset all to defaults
             </button>
           </div>
-
-          {/* Model Health — visible here so it's only seen when settings are open */}
-          {institution && (
-            <ModelHealthPanel
-              inputs={inputs}
-              footprintInputs={footprintInputs ?? inputs}
-              scenario={scenario ?? "scenario_a"}
-              institution={institution}
-            />
-          )}
         </div>
       )}
     </div>

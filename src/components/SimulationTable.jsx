@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // Milestone months shown as rows in the table
 const MILESTONE_MONTHS = [1, 6, 12, 24, 36, 60];
@@ -38,6 +38,8 @@ function realismText(overall) {
 function InfoTooltip({ children }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const tipRef = useRef(null);
+  const [offsetX, setOffsetX] = useState(0);
 
   // Close when the user clicks outside the tooltip
   useEffect(() => {
@@ -47,6 +49,26 @@ function InfoTooltip({ children }) {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setOffsetX(0);
+      return;
+    }
+    if (!tipRef.current) return;
+    const margin = 16;
+    const viewportWidth = document.documentElement.clientWidth;
+    const rect = tipRef.current.getBoundingClientRect();
+    // rect reflects the untransformed position on first paint since offsetX resets to 0 on close
+    let next = 0;
+    if (rect.right > viewportWidth - margin) {
+      next = viewportWidth - margin - rect.right;
+    }
+    if (rect.left + next < margin) {
+      next = margin - rect.left;
+    }
+    setOffsetX(next);
   }, [open]);
 
   return (
@@ -65,8 +87,10 @@ function InfoTooltip({ children }) {
       {/* Tooltip panel */}
       {open && (
         <span
+          ref={tipRef}
           role="tooltip"
-          className="absolute top-5 left-0 z-20 w-72 rounded-lg bg-zinc-800 px-3.5 py-3 text-xs text-white leading-relaxed shadow-lg"
+          style={{ transform: offsetX ? `translateX(${offsetX}px)` : undefined }}
+          className="absolute top-5 left-0 z-20 w-72 max-w-[calc(100vw-2rem)] rounded-lg bg-zinc-800 px-3.5 py-3 text-xs text-white leading-relaxed shadow-lg"
         >
           {/* Close button */}
           <button

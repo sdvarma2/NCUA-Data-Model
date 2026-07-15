@@ -4,10 +4,13 @@ import { resolveInputs, LEVER_PRESETS, LEVER_DEFAULTS } from "@/lib/levers";
 // ─── LEVER_PRESETS shape ─────────────────────────────────────────────────────
 
 describe("LEVER_PRESETS", () => {
-  it("defines presets for acquisitionAggression, rateCompetitiveness, and memberProfile", () => {
-    expect(LEVER_PRESETS).toHaveProperty("acquisitionAggression");
-    expect(LEVER_PRESETS).toHaveProperty("rateCompetitiveness");
+  it("defines presets for rateIncentives and memberProfile", () => {
+    expect(LEVER_PRESETS).toHaveProperty("rateIncentives");
     expect(LEVER_PRESETS).toHaveProperty("memberProfile");
+  });
+
+  it("does not include acquisitionCostProfile (consolidated into Market Competitiveness, driven by MARKET_COMPETITIVENESS_PRESETS in model.js)", () => {
+    expect(LEVER_PRESETS).not.toHaveProperty("acquisitionCostProfile");
   });
 
   it("does not include marketOpportunity (TAM handled via Advanced Settings field)", () => {
@@ -20,59 +23,17 @@ describe("LEVER_PRESETS", () => {
     }
   });
 
-  // ─── acquisitionAggression ──────────────────────────────────────────────────
+  // ─── rateIncentives ─────────────────────────────────────────────────────────
 
-  describe("acquisitionAggression", () => {
+  describe("rateIncentives", () => {
     it("has Conservative / Moderate / Aggressive positions", () => {
-      expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Conservative");
-      expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Moderate");
-      expect(LEVER_PRESETS.acquisitionAggression).toHaveProperty("Aggressive");
-    });
-
-    it("each position specifies initialCPA, steadyStateCPA, monthsToSteadyState", () => {
-      for (const preset of Object.values(LEVER_PRESETS.acquisitionAggression)) {
-        expect(preset).toHaveProperty("initialCPA");
-        expect(preset).toHaveProperty("steadyStateCPA");
-        expect(preset).toHaveProperty("monthsToSteadyState");
-      }
-    });
-
-    it("Conservative is a flat-CPA strategy — initialCPA equals steadyStateCPA", () => {
-      const c = LEVER_PRESETS.acquisitionAggression.Conservative;
-      expect(c.initialCPA).toBe(c.steadyStateCPA);
-    });
-
-    it("Aggressive has a higher initialCPA than Conservative (heavier up-front spend)", () => {
-      expect(LEVER_PRESETS.acquisitionAggression.Aggressive.initialCPA).toBeGreaterThan(
-        LEVER_PRESETS.acquisitionAggression.Conservative.initialCPA
-      );
-    });
-
-    it("Aggressive has a lower steadyStateCPA than Conservative (stronger network effects at scale)", () => {
-      expect(LEVER_PRESETS.acquisitionAggression.Aggressive.steadyStateCPA).toBeLessThan(
-        LEVER_PRESETS.acquisitionAggression.Conservative.steadyStateCPA
-      );
-    });
-
-    it("correct calibrated values", () => {
-      const { Conservative, Moderate, Aggressive } = LEVER_PRESETS.acquisitionAggression;
-      expect(Conservative).toEqual({ initialCPA: 250, steadyStateCPA: 250, monthsToSteadyState: 60 });
-      expect(Moderate).toEqual({     initialCPA: 450, steadyStateCPA: 225, monthsToSteadyState: 60 });
-      expect(Aggressive).toEqual({   initialCPA: 800, steadyStateCPA: 200, monthsToSteadyState: 54 });
-    });
-  });
-
-  // ─── rateCompetitiveness ────────────────────────────────────────────────────
-
-  describe("rateCompetitiveness", () => {
-    it("has Conservative / Moderate / Aggressive positions", () => {
-      expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Conservative");
-      expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Moderate");
-      expect(LEVER_PRESETS.rateCompetitiveness).toHaveProperty("Aggressive");
+      expect(LEVER_PRESETS.rateIncentives).toHaveProperty("Conservative");
+      expect(LEVER_PRESETS.rateIncentives).toHaveProperty("Moderate");
+      expect(LEVER_PRESETS.rateIncentives).toHaveProperty("Aggressive");
     });
 
     it("each position specifies rateBump, ratePremiumDecay, rateBumpFloor, and rateCut", () => {
-      for (const preset of Object.values(LEVER_PRESETS.rateCompetitiveness)) {
+      for (const preset of Object.values(LEVER_PRESETS.rateIncentives)) {
         expect(preset).toHaveProperty("rateBump");
         expect(preset).toHaveProperty("ratePremiumDecay");
         expect(preset).toHaveProperty("rateBumpFloor");
@@ -80,32 +41,62 @@ describe("LEVER_PRESETS", () => {
       }
     });
 
+    it("each position specifies qMultiplier and attritionMultiplier, but no pMultiplier", () => {
+      for (const preset of Object.values(LEVER_PRESETS.rateIncentives)) {
+        expect(preset).toHaveProperty("qMultiplier");
+        expect(preset).toHaveProperty("attritionMultiplier");
+        expect(preset).not.toHaveProperty("pMultiplier");
+      }
+    });
+
     it("Conservative is a flat-rate strategy — ratePremiumDecay is 0", () => {
-      expect(LEVER_PRESETS.rateCompetitiveness.Conservative.ratePremiumDecay).toBe(0);
+      expect(LEVER_PRESETS.rateIncentives.Conservative.ratePremiumDecay).toBe(0);
     });
 
     it("Conservative rateBump equals rateBumpFloor (premium locked in permanently)", () => {
-      const c = LEVER_PRESETS.rateCompetitiveness.Conservative;
+      const c = LEVER_PRESETS.rateIncentives.Conservative;
       expect(c.rateBump).toBe(c.rateBumpFloor);
     });
 
     it("Aggressive has a higher rateBump than Conservative", () => {
-      expect(LEVER_PRESETS.rateCompetitiveness.Aggressive.rateBump).toBeGreaterThan(
-        LEVER_PRESETS.rateCompetitiveness.Conservative.rateBump
+      expect(LEVER_PRESETS.rateIncentives.Aggressive.rateBump).toBeGreaterThan(
+        LEVER_PRESETS.rateIncentives.Conservative.rateBump
       );
     });
 
     it("Aggressive has a higher rateCut than Conservative (more competitive loan pricing)", () => {
-      expect(LEVER_PRESETS.rateCompetitiveness.Aggressive.rateCut).toBeGreaterThan(
-        LEVER_PRESETS.rateCompetitiveness.Conservative.rateCut
+      expect(LEVER_PRESETS.rateIncentives.Aggressive.rateCut).toBeGreaterThan(
+        LEVER_PRESETS.rateIncentives.Conservative.rateCut
       );
     });
 
-    it("correct calibrated values", () => {
-      const { Conservative, Moderate, Aggressive } = LEVER_PRESETS.rateCompetitiveness;
-      expect(Conservative).toEqual({ rateBump: 25,  ratePremiumDecay: 0,  rateBumpFloor: 25, rateCut: 10 });
-      expect(Moderate).toEqual({     rateBump: 50,  ratePremiumDecay: 10, rateBumpFloor: 10, rateCut: 25 });
-      expect(Aggressive).toEqual({   rateBump: 100, ratePremiumDecay: 5,  rateBumpFloor: 25, rateCut: 50 });
+    it("correct rate values", () => {
+      const { Conservative, Moderate, Aggressive } = LEVER_PRESETS.rateIncentives;
+      expect(Conservative).toMatchObject({ rateBump: 25,  ratePremiumDecay: 0,  rateBumpFloor: 25, rateCut: 10 });
+      expect(Moderate).toMatchObject({     rateBump: 50,  ratePremiumDecay: 10, rateBumpFloor: 10, rateCut: 25 });
+      expect(Aggressive).toMatchObject({   rateBump: 100, ratePremiumDecay: 5,  rateBumpFloor: 25, rateCut: 50 });
+    });
+
+    it("Conservative has qMultiplier < 1 (slower word-of-mouth)", () => {
+      expect(LEVER_PRESETS.rateIncentives.Conservative.qMultiplier).toBeLessThan(1);
+    });
+
+    it("Conservative has attritionMultiplier < 1 (relationship members churn less)", () => {
+      expect(LEVER_PRESETS.rateIncentives.Conservative.attritionMultiplier).toBeLessThan(1);
+    });
+
+    it("Moderate multipliers are all exactly 1.0 (baseline — no adjustment)", () => {
+      const m = LEVER_PRESETS.rateIncentives.Moderate;
+      expect(m.qMultiplier).toBe(1.0);
+      expect(m.attritionMultiplier).toBe(1.0);
+    });
+
+    it("Aggressive has qMultiplier > 1 (stronger word-of-mouth from high rates)", () => {
+      expect(LEVER_PRESETS.rateIncentives.Aggressive.qMultiplier).toBeGreaterThan(1);
+    });
+
+    it("Aggressive has attritionMultiplier > 1 (hot money members churn more)", () => {
+      expect(LEVER_PRESETS.rateIncentives.Aggressive.attritionMultiplier).toBeGreaterThan(1);
     });
   });
 
@@ -162,16 +153,12 @@ describe("LEVER_PRESETS", () => {
 // ─── LEVER_DEFAULTS ──────────────────────────────────────────────────────────
 
 describe("LEVER_DEFAULTS", () => {
-  it("defaults rateCompetitiveness to Moderate", () => {
-    expect(LEVER_DEFAULTS.rateCompetitiveness).toBe("Moderate");
+  it("defaults rateIncentives to Moderate", () => {
+    expect(LEVER_DEFAULTS.rateIncentives).toBe("Moderate");
   });
 
   it("defaults memberProfile to Balanced", () => {
     expect(LEVER_DEFAULTS.memberProfile).toBe("Balanced");
-  });
-
-  it("does not include acquisitionAggression (wired directly in page.jsx, not via LEVER_DEFAULTS)", () => {
-    expect(LEVER_DEFAULTS).not.toHaveProperty("acquisitionAggression");
   });
 
   it("does not include marketOpportunity", () => {
@@ -205,6 +192,13 @@ describe("resolveInputs", () => {
     expect(inputs).toHaveProperty("monthsToSteadyState");
   });
 
+  it("includes Bass multiplier keys (qMultiplier, attritionMultiplier), but no pMultiplier", () => {
+    const inputs = resolveInputs({});
+    expect(inputs).toHaveProperty("qMultiplier");
+    expect(inputs).toHaveProperty("attritionMultiplier");
+    expect(inputs).not.toHaveProperty("pMultiplier");
+  });
+
   it("non-lever inputs are preserved unchanged", () => {
     const inputs = resolveInputs({});
     expect(inputs.maintenanceDigital).toBe(DEFAULT_INPUTS.maintenanceDigital);
@@ -214,7 +208,7 @@ describe("resolveInputs", () => {
 
   it("does not mutate DEFAULT_INPUTS", () => {
     const before = { ...DEFAULT_INPUTS };
-    resolveInputs({ rateCompetitiveness: "Aggressive", memberProfile: "Upmarket" });
+    resolveInputs({ rateIncentives: "Aggressive", memberProfile: "Upmarket" });
     expect(DEFAULT_INPUTS).toEqual(before);
   });
 

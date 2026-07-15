@@ -692,52 +692,56 @@ Verified against Robins Financial CU, GA ($4.79B assets, 271k members, NIM 3.44%
 
 ---
 
-### Phase 3 — Animation & Visualization (Steps 14–21)
+### Phase 3 — Animation & Visualization (Steps 14–21) ✅
 
 These steps build on a model whose inputs and outputs you trust.
 
-**14. Play animation engine**
-- Add play / pause / reset controls and a speed selector (1× / 2× / 4×)
-- Use `requestAnimationFrame` to step through the 60-month array at controlled speed
-- Expose `currentMonth` as state; all visualizations read from `simulation[currentMonth - 1]`
-- Both scenarios are already pre-computed; switching scenario replays instantly
+**14. Play animation engine** ✅
+- `useSimulationPlayer` hook in `src/lib/useSimulationPlayer.js`
+- `requestAnimationFrame` with timestamp-based stepping; speed-independent of frame rate
+- 1× = 333ms/month (~20s), 2× = 167ms (~10s), 4× = 83ms (~5s)
+- `currentMonth` state (0 = not started, 1–60 = playing/paused)
+- Scrubber (range input) lets user jump to any month; pauses playback
+- Both scenarios pre-computed; switching scenario replays instantly
 
-**15. Live counters**
-Animated number displays that update as `currentMonth` advances:
-- Digital members (counting up)
-- Cumulative acquisition spend (counting up, red)
-- Cannibalization drag to date (counting up, amber; deposit vs loan breakdown on hover)
-- Cumulative net contribution (red → green transition at break-even)
-- Month / Year label
+**15. Live counters** ✅
+- Digital Members / Cumul. Acq. Spend (red) / Cannib. Drag (amber) / Cumul. Net (red→green)
+- Month/Year header label ("Month 24 · Year 2")
+- Net counter turns emerald and shows "Break-even reached ✓" when past break-even
 
-**16. P&L curve with break-even moment**
-- Recharts `LineChart` that draws progressively as the simulation plays (data filtered to `slice(0, currentMonth)`)
-- Y-axis spans the full range from min to max cumulative net
-- When `isBreakEvenMonth` fires: line color transitions to green, a subtle radial pulse animation, "Break-even — Month X" label appears and stays
+**16. P&L curve with break-even moment** ✅
+- Recharts `ComposedChart` drawing progressively via `slice(0, currentMonth)`
+- Y-axis domain spans all 60 months' full range (both lines) so scale never shifts during animation
+- Break-even: entire visible line turns green; `ReferenceLine` with label appears and stays
+- Traveling dot on last visible data point
 
-**17. Cannibalization shadow**
-- Second line on the P&L chart: "without cannibalization" (cumulative net + cumulativeCannibalDrag)
-- Fill the area between the two lines with a muted amber/red with low opacity
-- Shadow is visibly wider and appears immediately in Scenario B vs. Scenario A — this is the key visual the brief is built around
+**17. Cannibalization shadow** ✅
+- Dashed amber line: "without cannibalization" = `cumulativeNetContribution + cumulativeCannibalDrag`
+- Amber gradient fill under the ghost line; white Area fill under the real line masks below it
+- In comparison mode the shadow difference between Scenario A and B is immediately visible
 
-**18. Cohort waterfall**
-- Recharts `BarChart` (stacked) that builds alongside the P&L curve
-- Three layers per month: new members acquired (bright), retained from prior months (mid), attrition (downward notch or negative stack)
-- Advances month by month in sync with the P&L curve
+**18. Cohort waterfall** ✅
+- Recharts stacked `BarChart`: retained (gray) + new (blue) stack upward; attrition (red) notch downward
+- Synced to `currentMonth`; bar width narrows as more months are revealed
 
-**19. Market penetration indicator**
-- Simple arc or radial progress showing `marketPenetrationPct`
-- Updates as simulation plays; visually communicates market saturation approaching
+**19. Market penetration indicator** ✅
+- Custom SVG semicircular arc gauge; no dependency on recharts
+- Scenario A: single blue arc (expansion market)
+- Scenario B: outer blue (expansion) + inner amber (branch footprint) ring
 
-**20. Post-simulation summary cards**
-After the simulation completes (or at any point after it's been run), four cards appear below the stage:
-1. Break-even — Month X of 60 (or "Not reached within 5 years")
-2. 5-year cumulative net contribution — $X.XM
-3. Cannibalization cost — $X.XM total drag, split deposit vs loan
-4. OpEx savings potential — $X.XM annually if hybrid benchmark density reached (from institution's `opex_gap_vs_hybrid_median`)
+**20. Post-simulation summary cards** ✅
+Four cards appear after `currentMonth >= 60`:
+1. Break-even — Month X of 60 (or "Not reached")
+2. 5-year cumulative net — $X.XXM
+3. Cannibalization cost — total with deposit/loan split
+4. Per-Member OpEx Gap — annual savings opportunity vs high-digital-density peer median
+   (note: framed as efficiency gap, not "if hybrid reached", to match institution card redesign)
 
-**21. Scenario comparison**
-A "Compare Scenarios" button that runs the other scenario (already pre-computed) and shows both P&L curves on the same chart simultaneously — one solid, one dashed. The shaded gap area between them is the total cost of the bolder strategy. Break-even months marked on both lines.
+**21. Scenario comparison** ✅
+- "Compare Scenarios" / "Close Comparison" toggle button
+- Both P&L curves + cannib ghost lines shown simultaneously on same chart
+- Primary scenario = solid; secondary = dashed; separate break-even markers on both
+- Y-axis auto-scales to accommodate full range of both simulations
 
 **22. Polish + deploy**
 - Responsive layout verification at 375px (iPhone SE) per CLAUDE.md requirements

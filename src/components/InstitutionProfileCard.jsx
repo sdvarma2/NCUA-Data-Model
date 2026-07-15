@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { toTitleCase, formatCurrency, formatPct, formatAssets, formatCount } from "@/lib/formatters";
 import DigitalDensityLegend from "@/components/DigitalDensityLegend";
 import { DEFAULT_INPUTS } from "@/lib/model";
@@ -117,6 +117,29 @@ function statusClass(s) {
  */
 function InfoTip({ children, className = "w-72" }) {
   const [open, setOpen] = useState(false);
+  const [offsetX, setOffsetX] = useState(0);
+  const tipRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setOffsetX(0);
+      return;
+    }
+    if (!tipRef.current) return;
+    const margin = 16;
+    const viewportWidth = document.documentElement.clientWidth;
+    const rect = tipRef.current.getBoundingClientRect();
+    // rect reflects the untransformed position on first paint since offsetX resets to 0 on close
+    let next = 0;
+    if (rect.right > viewportWidth - margin) {
+      next = viewportWidth - margin - rect.right;
+    }
+    if (rect.left + next < margin) {
+      next = margin - rect.left;
+    }
+    setOffsetX(next);
+  }, [open]);
+
   return (
     <span className="relative inline-flex items-center ml-1 align-middle">
       <button
@@ -140,8 +163,10 @@ function InfoTip({ children, className = "w-72" }) {
       </button>
       {open && (
         <span
+          ref={tipRef}
           data-tip-panel
           role="tooltip"
+          style={{ transform: offsetX ? `translateX(${offsetX}px)` : undefined }}
           className={`absolute left-0 top-full mt-1.5 z-20 rounded-lg bg-zinc-800 px-3.5 py-3 text-xs text-white leading-relaxed shadow-lg ${className}`}
         >
           <button

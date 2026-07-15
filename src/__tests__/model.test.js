@@ -4,6 +4,7 @@ import {
   MARKET_COMPETITIVENESS_PRESETS,
   calibrateAcquisition,
   computeCPA,
+  computeCumulativeAcquisitionSpend,
   computeServicingDelta,
   computeRatePremiumCost,
   computeCannibalCost,
@@ -12,6 +13,7 @@ import {
   findBreakEven,
   runSimulation,
   suggestMilestones,
+  deriveMilestonesForM60Target,
 } from "@/lib/model";
 
 // Minimal institution fixture — 1B in assets for easy math
@@ -208,6 +210,103 @@ describe("calibrateAcquisition", () => {
   });
 });
 
+// ─── calibrateAcquisition — Rate Incentives solve-for-p ──────────────────────
+// p (paid/outbound acquisition intensity) is solved to hold the Month 60 goal
+// fixed under whatever Rate Incentives posture is selected — it is no longer
+// a straight multiply. q and attrition are still multiplied directly.
+
+describe("calibrateAcquisition — Rate Incentives solve-for-p", () => {
+  it("returns pBaseline, qBaseline, and rateFitIndicator in addition to p/q/realismIndicator", () => {
+    const result = calibrateAcquisition(TEST_INPUTS);
+    expect(result).toHaveProperty("pBaseline");
+    expect(result).toHaveProperty("qBaseline");
+    expect(result).toHaveProperty("rateFitIndicator");
+  });
+
+  it("at Moderate multipliers (1.0×), p solves back to pBaseline and q equals qBaseline", () => {
+    const result = calibrateAcquisition(TEST_INPUTS); // qMultiplier/attritionMultiplier default to 1.0
+    expect(result.p).toBeCloseTo(result.pBaseline, 3);
+    expect(result.q).toBe(result.qBaseline);
+  });
+
+  it("residuals[60] is ~0 whenever the solved p is not pinned at a search bound (goal hit exactly)", () => {
+    const result = calibrateAcquisition(TEST_INPUTS);
+    expect(result.p).toBeGreaterThan(0.001);
+    expect(result.p).toBeLessThan(0.05);
+    expect(Math.abs(result.residuals[60])).toBeLessThan(0.01);
+  });
+
+  it("higher qMultiplier (more word-of-mouth) requires lower p to hit the same goal", () => {
+    const lowQ  = calibrateAcquisition({ ...TEST_INPUTS, qMultiplier: 0.65 });
+    const highQ = calibrateAcquisition({ ...TEST_INPUTS, qMultiplier: 1.55 });
+    expect(highQ.p).toBeLessThan(lowQ.p);
+  });
+
+  it("higher attritionMultiplier (faster churn) requires higher p to hit the same goal", () => {
+    const lowAttrition  = calibrateAcquisition({ ...TEST_INPUTS, attritionMultiplier: 0.60 });
+    const highAttrition = calibrateAcquisition({ ...TEST_INPUTS, attritionMultiplier: 1.60 });
+    expect(highAttrition.p).toBeGreaterThan(lowAttrition.p);
+  });
+
+  it("both non-Moderate multipliers still hit the goal almost exactly (Month 60 never drifts)", () => {
+    const conservative = calibrateAcquisition({ ...TEST_INPUTS, qMultiplier: 0.65, attritionMultiplier: 0.60 });
+    const aggressive   = calibrateAcquisition({ ...TEST_INPUTS, qMultiplier: 1.55, attritionMultiplier: 1.60 });
+    expect(Math.abs(conservative.residuals[60])).toBeLessThan(0.02);
+    expect(Math.abs(aggressive.residuals[60])).toBeLessThan(0.02);
+  });
+
+  it("realismIndicator (baseline, Market & Goal) is unaffected by qMultiplier/attritionMultiplier", () => {
+    const moderate   = calibrateAcquisition(TEST_INPUTS);
+    const aggressive = calibrateAcquisition({ ...TEST_INPUTS, qMultiplier: 1.55, attritionMultiplier: 1.60 });
+    expect(aggressive.pBaseline).toBeCloseTo(moderate.pBaseline, 6);
+    expect(aggressive.qBaseline).toBeCloseTo(moderate.qBaseline, 6);
+    expect(aggressive.realismIndicator).toEqual(moderate.realismIndicator);
+  });
+
+  it("an unreachable goal at a given rate posture pins p at the upper bound and shows a non-trivial residual", () => {
+    // SAM is tiny relative to an aggressively large goal — even q boosted by
+    // Aggressive rates can't make up the gap without an unrealistic p.
+    const tinyMarket = { ...TEST_INPUTS, tam: 2000, samPct: 40, qMultiplier: 1.55, attritionMultiplier: 1.60 };
+    const result = calibrateAcquisition(tinyMarket);
+    expect(result.p).toBeCloseTo(0.05, 5);
+    expect(result.rateFitIndicator.overall).not.toBe("green");
+  });
+
+  it("rateFitIndicator reflects the current rate posture and can differ from the baseline realismIndicator", () => {
+    const aggressive = calibrateAcquisition({
+      ...TEST_INPUTS, tam: 2000, samPct: 40, qMultiplier: 1.55, attritionMultiplier: 1.60,
+    });
+    expect(aggressive.rateFitIndicator).not.toEqual(aggressive.realismIndicator);
+  });
+
+  it("rateFitIndicator is NOT flagged red merely because Aggressive's back-loaded curve undershoots M12/M36, as long as Month 60 is hit (regression: was previously judged against all three milestones)", () => {
+    // DEFAULT_INPUTS reproduces the reported bug directly: Aggressive's low
+    // p / high q reshapes the curve to be heavily back-loaded (word-of-mouth
+    // needs an installed base to compound), which genuinely undershoots M12
+    // even while landing exactly on M60.
+    const moderate   = calibrateAcquisition(DEFAULT_INPUTS);
+    const aggressive = calibrateAcquisition({ ...DEFAULT_INPUTS, qMultiplier: 1.55, attritionMultiplier: 1.60 });
+
+    // Confirm the scenario this regression test targets: p is not saturated,
+    // Month 60 is hit almost exactly, but Month 12 is genuinely undershot.
+    expect(aggressive.p).toBeLessThan(0.05);
+    expect(Math.abs(aggressive.residuals[60])).toBeLessThan(0.02);
+    expect(aggressive.residuals[12]).toBeLessThan(-0.10);
+
+    // Despite that M12 shortfall, Rate Fit should still read as achievable —
+    // it only judges the milestone p is actually solved against.
+    expect(aggressive.rateFitIndicator.tensionStatus).toBe("green");
+    expect(moderate.rateFitIndicator.overall).toBe(aggressive.rateFitIndicator.overall);
+  });
+
+  it("does not mutate the input object", () => {
+    const inputs = { ...TEST_INPUTS, qMultiplier: 1.55, attritionMultiplier: 1.60 };
+    const before = { ...inputs };
+    calibrateAcquisition(inputs);
+    expect(inputs).toEqual(before);
+  });
+});
+
 // ─── computeCPA ──────────────────────────────────────────────────────────────
 
 describe("computeCPA", () => {
@@ -247,6 +346,48 @@ describe("computeCPA", () => {
     const cpa = computeCPA(mid, DEFAULT_INPUTS);
     const expectedMid = (DEFAULT_INPUTS.initialCPA + DEFAULT_INPUTS.steadyStateCPA) / 2;
     expect(cpa).toBeCloseTo(expectedMid, 0);
+  });
+});
+
+// ─── computeCumulativeAcquisitionSpend ───────────────────────────────────────
+
+describe("computeCumulativeAcquisitionSpend", () => {
+  it("equals the sum of newMembersGross(m) × computeCPA(m) across all 60 months", () => {
+    const calibration = calibrateAcquisition(TEST_INPUTS);
+    let expected = 0;
+    for (let m = 1; m <= 60; m++) {
+      expected += calibration.bassGrossCurve[m - 1] * computeCPA(m, calibration.effectiveInputs);
+    }
+    expect(computeCumulativeAcquisitionSpend(calibration)).toBeCloseTo(expected, 6);
+  });
+
+  it("is positive whenever the Bass curve acquires any members", () => {
+    const calibration = calibrateAcquisition(TEST_INPUTS);
+    expect(calibration.bassGrossCurve.some((v) => v > 0)).toBe(true);
+    expect(computeCumulativeAcquisitionSpend(calibration)).toBeGreaterThan(0);
+  });
+
+  it("a higher Market Competitiveness preset (higher CPA) increases total spend, holding the curve fixed", () => {
+    const lowCPAInputs  = { ...TEST_INPUTS, initialCPA: 300, steadyStateCPA: 175 };
+    const highCPAInputs = { ...TEST_INPUTS, initialCPA: 650, steadyStateCPA: 275 };
+    const lowSpend  = computeCumulativeAcquisitionSpend(calibrateAcquisition(lowCPAInputs));
+    const highSpend = computeCumulativeAcquisitionSpend(calibrateAcquisition(highCPAInputs));
+    expect(highSpend).toBeGreaterThan(lowSpend);
+  });
+
+  it("a larger Bass curve (bigger m60Target) increases total spend, holding CPA fixed", () => {
+    const smallGoalInputs = { ...TEST_INPUTS, m60Target: 1500, m36Target: 900, m12Target: 250 };
+    const bigGoalInputs   = { ...TEST_INPUTS, m60Target: 3000, m36Target: 1800, m12Target: 500 };
+    const smallSpend = computeCumulativeAcquisitionSpend(calibrateAcquisition(smallGoalInputs));
+    const bigSpend   = computeCumulativeAcquisitionSpend(calibrateAcquisition(bigGoalInputs));
+    expect(bigSpend).toBeGreaterThan(smallSpend);
+  });
+
+  it("does not mutate the calibration object", () => {
+    const calibration = calibrateAcquisition(TEST_INPUTS);
+    const before = JSON.parse(JSON.stringify(calibration.bassGrossCurve));
+    computeCumulativeAcquisitionSpend(calibration);
+    expect(calibration.bassGrossCurve).toEqual(before);
   });
 });
 
@@ -782,6 +923,67 @@ describe("suggestMilestones", () => {
   it("does not mutate inputs", () => {
     const before = { ...TEST_INPUTS };
     suggestMilestones(TEST_INPUTS);
+    expect(TEST_INPUTS).toEqual(before);
+  });
+});
+
+// ─── deriveMilestonesForM60Target ────────────────────────────────────────────
+
+describe("deriveMilestonesForM60Target", () => {
+  it("returns the exact m60Target passed in, unmodified", () => {
+    const result = deriveMilestonesForM60Target(TEST_INPUTS, 30000);
+    expect(result.m60Target).toBe(30000);
+  });
+
+  it("m12Target and m36Target increase when m60Target increases", () => {
+    const low  = deriveMilestonesForM60Target(TEST_INPUTS, 15000);
+    const high = deriveMilestonesForM60Target(TEST_INPUTS, 30000);
+    expect(high.m12Target).toBeGreaterThan(low.m12Target);
+    expect(high.m36Target).toBeGreaterThan(low.m36Target);
+  });
+
+  it("m12Target and m36Target scale roughly proportionally with m60Target", () => {
+    // Doubling m60Target should roughly double m12/m36 too (same reference shape)
+    const base   = deriveMilestonesForM60Target(TEST_INPUTS, 15000);
+    const double = deriveMilestonesForM60Target(TEST_INPUTS, 30000);
+    expect(double.m12Target / base.m12Target).toBeGreaterThan(1.6);
+    expect(double.m12Target / base.m12Target).toBeLessThan(2.4);
+    expect(double.m36Target / base.m36Target).toBeGreaterThan(1.6);
+    expect(double.m36Target / base.m36Target).toBeLessThan(2.4);
+  });
+
+  it("milestones are strictly increasing (m12 < m36 < m60)", () => {
+    const { m12Target, m36Target, m60Target } = deriveMilestonesForM60Target(TEST_INPUTS, 20000);
+    expect(m12Target).toBeGreaterThan(0);
+    expect(m36Target).toBeGreaterThan(m12Target);
+    expect(m60Target).toBeGreaterThan(m36Target);
+  });
+
+  it("feeding the derived milestones back into calibrateAcquisition produces a monotonic, consistent fit", () => {
+    // This is the regression case for the reported bug: bumping m60Target should
+    // never cause projectedM12 to move in the opposite direction. Targets stay
+    // well within TEST_INPUTS' SAM (20,000) so the optimizer isn't saturated at
+    // its p/q bounds for both cases, which would mask a real regression.
+    const lowInputs  = { ...TEST_INPUTS, ...deriveMilestonesForM60Target(TEST_INPUTS, 2000) };
+    const highInputs = { ...TEST_INPUTS, ...deriveMilestonesForM60Target(TEST_INPUTS, 4000) };
+    const low  = calibrateAcquisition(lowInputs);
+    const high = calibrateAcquisition(highInputs);
+    expect(high.projectedM12).toBeGreaterThan(low.projectedM12);
+    expect(high.projectedM36).toBeGreaterThan(low.projectedM36);
+    expect(high.projectedM60).toBeGreaterThan(low.projectedM60);
+  });
+
+  it("returns zeroed milestones when SAM-derived reference curve produces no adoption", () => {
+    const zeroSam = { ...TEST_INPUTS, tam: 0 };
+    const result = deriveMilestonesForM60Target(zeroSam, 10000);
+    expect(result.m12Target).toBe(0);
+    expect(result.m36Target).toBe(0);
+    expect(result.m60Target).toBe(10000);
+  });
+
+  it("does not mutate inputs", () => {
+    const before = { ...TEST_INPUTS };
+    deriveMilestonesForM60Target(TEST_INPUTS, 30000);
     expect(TEST_INPUTS).toEqual(before);
   });
 });

@@ -1,54 +1,38 @@
 import { DEFAULT_INPUTS } from "@/lib/model";
 
-/**
- * Strategy lever presets.
- *
- * NOTE: acquisitionAggression and marketOpportunity were removed — replaced by the
- * Bass model acquisition inputs (milestones, TAM/SAM, CPA economics) and the
- * Market Competitiveness preset toggle in Advanced Settings.
- *
- * rateCompetitiveness and memberProfile are preserved but currently hollowed out —
- * resolveInputs returns DEFAULT_INPUTS unchanged. Reconnection deferred until
- * post-calibration phase.
- */
 export const LEVER_PRESETS = {
-  // 5-year window is insufficient for network effects in a new expansion market.
-  // Steady-state CPA is a theoretical floor rarely approached by Month 60.
-  // Conservative = flat (no efficiency gains); Aggressive = heavy invest, slight decay.
-  acquisitionAggression: {
-    Conservative: { initialCPA: 250, steadyStateCPA: 250, monthsToSteadyState: 60 },
-    Moderate:     { initialCPA: 450, steadyStateCPA: 225, monthsToSteadyState: 60 },
-    Aggressive:   { initialCPA: 800, steadyStateCPA: 200, monthsToSteadyState: 54 },
-  },
-
-  rateCompetitiveness: {
-    // Conservative: "set it and forget it" — modest persistent incentive, no decay.
-    // Moderate: meaningful premium that erodes slowly to a small persistent edge.
-    // Aggressive: rate leadership; premium held through most of the planning window.
+  // ── Rate Incentives ───────────────────────────────────────────────────────
+  // Sets deposit/loan rate incentives AND adjusts the Bass diffusion model:
+  //   q multiplier — word-of-mouth referrals driven by member satisfaction with rates
+  //   attrition multiplier — rate-sensitive members churn more; relationship members churn less
+  // There is no p multiplier — p (paid/outbound acquisition intensity) is
+  // solved in calibrateAcquisition() to hold the Month 60 goal fixed under
+  // whichever posture is selected here, since p is the marketing-spend-elastic
+  // lever, not a fixed behavioral consequence of the rate story.
+  //
+  // Conservative: modest permanent incentive; attracts relationship joiners who stay.
+  // Moderate: meaningful premium that erodes over time; baseline assumptions.
+  // Aggressive: high-yield-level premium; fast adoption but "hot money" churn risk.
+  rateIncentives: {
     Conservative: {
-      rateBump: 25,
-      ratePremiumDecay: 0,
-      rateBumpFloor: 25,
-      rateCut: 10,
+      rateBump: 25, ratePremiumDecay: 0, rateBumpFloor: 25, rateCut: 10,
+      qMultiplier: 0.65, attritionMultiplier: 0.60,
     },
     Moderate: {
-      rateBump: 50,
-      ratePremiumDecay: 10,
-      rateBumpFloor: 10,
-      rateCut: 25,
+      rateBump: 50, ratePremiumDecay: 10, rateBumpFloor: 10, rateCut: 25,
+      qMultiplier: 1.0, attritionMultiplier: 1.0,
     },
     Aggressive: {
-      rateBump: 100,
-      ratePremiumDecay: 5,
-      rateBumpFloor: 25,
-      rateCut: 50,
+      rateBump: 100, ratePremiumDecay: 5, rateBumpFloor: 25, rateCut: 50,
+      qMultiplier: 1.55, attritionMultiplier: 1.60,
     },
   },
 
+  // ── Target Member Profile ─────────────────────────────────────────────────
+  // Conservative 5-year-average assumptions for a net-new digital product.
+  // Loan penetration ceiling anchored to SoFi (~20%) after years of brand-building
+  // — a new CU digital program in a fresh territory is unlikely to match that.
   memberProfile: {
-    // Conservative 5-year-average assumptions for a net-new digital product.
-    // Loan penetration ceiling anchored to SoFi (~20%) after years of brand-building
-    // — a new CU digital program in a fresh territory is unlikely to match that.
     "Mass Market": {
       samPct: 50,
       avgDepositBalance: 6000,
@@ -77,14 +61,13 @@ export const LEVER_PRESETS = {
 };
 
 export const LEVER_DEFAULTS = {
-  rateCompetitiveness: "Moderate",
-  memberProfile:       "Balanced",
+  rateIncentives: "Moderate",
+  memberProfile:  "Balanced",
 };
 
 /**
  * Returns a copy of DEFAULT_INPUTS.
- * Lever presets are preserved in LEVER_PRESETS for future reconnection
- * once the Advanced Settings calibration phase is complete.
+ * Lever presets are applied directly in page.jsx via handleLeverChange.
  */
 export function resolveInputs(_levers) {
   return { ...DEFAULT_INPUTS };
