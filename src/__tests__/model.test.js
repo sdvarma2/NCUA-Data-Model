@@ -23,6 +23,7 @@ const INSTITUTION = {
   members: 50000,
   branch_count: 10,
   hybrid_nim_p50: 2.657,
+  hybrid_div_rate_p50: 1.773,
 };
 
 // Stripped-down inputs that override defaults for deterministic, fast-converging tests.
@@ -58,7 +59,7 @@ describe("DEFAULT_INPUTS", () => {
   });
 
   it("has expected deposit defaults", () => {
-    expect(DEFAULT_INPUTS.avgDepositBalance).toBe(18000);
+    expect(DEFAULT_INPUTS.avgDepositBalance).toBe(8000);
     expect(DEFAULT_INPUTS.rateBump).toBe(50);
     expect(DEFAULT_INPUTS.ratePremiumDecay).toBe(10);
     expect(DEFAULT_INPUTS.rateBumpFloor).toBe(25);
@@ -68,6 +69,11 @@ describe("DEFAULT_INPUTS", () => {
     expect(DEFAULT_INPUTS.loanPenetrationRate).toBe(0.10);
     expect(DEFAULT_INPUTS.avgLoanBalance).toBe(10000);
     expect(DEFAULT_INPUTS.rateCut).toBe(25);
+  });
+
+  it("has expected funding rate defaults", () => {
+    expect(DEFAULT_INPUTS.wholesaleFundingRate).toBe(3.85);
+    expect(DEFAULT_INPUTS.investmentYieldRate).toBe(3.62);
   });
 
   it("has expected servicing defaults", () => {
@@ -450,9 +456,9 @@ describe("computeServicingDelta", () => {
 
 describe("computeRatePremiumCost", () => {
   it("applies full rateBump at month 1 (no decay yet)", () => {
-    // 100 members: deposit = 18000 × 0.005 / 12 = 7.5, loan = 10000 × 0.10 × 0.0025 / 12 ≈ 0.208
+    // 100 members: deposit = 8000 × 0.005 / 12 ≈ 3.333, loan = 10000 × 0.10 × 0.0025 / 12 ≈ 0.208
     const cost = computeRatePremiumCost(100, DEFAULT_INPUTS, 1);
-    expect(cost).toBeCloseTo(100 * (7.5 + 0.2083), 0);
+    expect(cost).toBeCloseTo(100 * (3.3333 + 0.2083), 0);
   });
 
   it("reduces effective rate bump over time due to decay", () => {
@@ -522,7 +528,7 @@ describe("computeCannibalCost", () => {
 // ─── computeNIIContribution ──────────────────────────────────────────────────
 
 describe("computeNIIContribution", () => {
-  it("returns a positive monthly NII for non-zero members", () => {
+  it("returns a positive monthly NII for non-zero members at defaults (deposit-heavy mix)", () => {
     expect(computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION)).toBeGreaterThan(0);
   });
 
@@ -536,22 +542,109 @@ describe("computeNIIContribution", () => {
     expect(nii200).toBeCloseTo(nii100 * 2, 0);
   });
 
-  it("uses hybrid_nim_p50 not institution nim_pct", () => {
-    const highHybrid = computeNIIContribution(1000, DEFAULT_INPUTS, { ...INSTITUTION, hybrid_nim_p50: 4.0, nim_pct: 1.0 });
-    const lowHybrid  = computeNIIContribution(1000, DEFAULT_INPUTS, { ...INSTITUTION, hybrid_nim_p50: 1.0, nim_pct: 4.0 });
-    expect(highHybrid).toBeGreaterThan(lowHybrid);
+  it("uses hybrid_nim_p50 / hybrid_div_rate_p50 benchmarks, not the institution's own nim_pct / dividend_rate_pct", () => {
+    const base = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION);
+    const withDifferentRawFields = computeNIIContribution(
+      1000, DEFAULT_INPUTS, { ...INSTITUTION, nim_pct: 99, dividend_rate_pct: 99 }
+    );
+    expect(withDifferentRawFields).toBeCloseTo(base, 6);
+
+    const withDifferentHybridNim = computeNIIContribution(
+      1000, DEFAULT_INPUTS, { ...INSTITUTION, hybrid_nim_p50: 5.0 }
+    );
+    expect(withDifferentHybridNim).not.toBeCloseTo(base, 0);
   });
 
-  it("formula: members × avgDepositBalance × (hybrid_nim_p50 / 100) / 12", () => {
-    const expected = 1000 * DEFAULT_INPUTS.avgDepositBalance * (INSTITUTION.hybrid_nim_p50 / 100) / 12;
-    expect(computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION)).toBeCloseTo(expected, 0);
+  it("defaults to month 1 (no rate-bump decay) when month is omitted", () => {
+    const omitted  = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION);
+    const explicit = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION, 1);
+    expect(omitted).toBeCloseTo(explicit, 6);
   });
 
-  it("returns a monthly (not annual) figure", () => {
-    // 1000 × $18000 × 2.657% / 12 ≈ $39,855/month
-    const nii = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION);
-    expect(nii).toBeGreaterThan(25000);
-    expect(nii).toBeLessThan(65000);
+  it("formula: loan leg (net of rateCut) minus deposit leg (net of rateBump) plus funding-gap adjustment", () => {
+    const members = 1000;
+    const perMemberLoan    = DEFAULT_INPUTS.avgLoanBalance * DEFAULT_INPUTS.loanPenetrationRate;
+    const perMemberDeposit = DEFAULT_INPUTS.avgDepositBalance;
+
+    const loanYieldRate   = (INSTITUTION.hybrid_nim_p50 + INSTITUTION.hybrid_div_rate_p50) / 100
+      - DEFAULT_INPUTS.rateCut / 10000;
+    const depositCostRate = INSTITUTION.hybrid_div_rate_p50 / 100 + DEFAULT_INPUTS.rateBump / 10000;
+
+    const gap = perMemberLoan - perMemberDeposit;
+    const fundingAdj = gap > 0
+      ? -gap * DEFAULT_INPUTS.wholesaleFundingRate / 100
+      : -gap * DEFAULT_INPUTS.investmentYieldRate / 100;
+
+    const netSpreadPerMemberYr = perMemberLoan * loanYieldRate - perMemberDeposit * depositCostRate + fundingAdj;
+    const expected = members * netSpreadPerMemberYr / 12;
+
+    expect(computeNIIContribution(members, DEFAULT_INPUTS, INSTITUTION)).toBeCloseTo(expected, 0);
+  });
+
+  it("deposit cost decays via the rate bump — later months show higher NII in a deposit-surplus mix", () => {
+    // At defaults, deposits ($18k) dwarf the loan leg ($1k = $10k × 10% penetration), so
+    // this is a deposit-surplus mix — decaying the bump lowers deposit cost, raising NII.
+    const early = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION, 1);
+    const later = computeNIIContribution(1000, DEFAULT_INPUTS, INSTITUTION, 25);
+    expect(later).toBeGreaterThan(early);
+  });
+
+  // ── Funding-gap behavior — this is the core fix: gross interest income must not
+  // collapse toward zero just because deposits are low while loans are high. ────
+
+  it("a loan-heavy funding gap (near-zero deposits, high loans) still earns real loan income — it does not collapse toward the old deposit-only formula's ~$0", () => {
+    const inputs = { ...DEFAULT_INPUTS, avgDepositBalance: 100, avgLoanBalance: 50000, loanPenetrationRate: 1 };
+    const nii = computeNIIContribution(1000, inputs, INSTITUTION);
+    // What the old (buggy) deposit-only formula would have produced for the same inputs.
+    const oldDepositOnlyFormula = 1000 * inputs.avgDepositBalance * (INSTITUTION.hybrid_nim_p50 / 100) / 12;
+    expect(oldDepositOnlyFormula).toBeLessThan(300); // ~$221/mo — reads as ~nothing
+    expect(nii).toBeGreaterThan(oldDepositOnlyFormula * 10); // now properly credits loan income
+  });
+
+  it("when the loan rate cut erodes yield below the wholesale funding rate, a loan-heavy gap turns the spread negative", () => {
+    // rateCut=200bps pulls loan yield (2.43%) below the 3.85% wholesale funding rate, so
+    // funding a $49,900 gap at wholesale now costs more than the loan itself earns.
+    const inputs = {
+      ...DEFAULT_INPUTS, avgDepositBalance: 100, avgLoanBalance: 50000, loanPenetrationRate: 1, rateCut: 200,
+    };
+    expect(computeNIIContribution(1000, inputs, INSTITUTION)).toBeLessThan(0);
+  });
+
+  it("NII moves continuously as deposits rise from near-zero to modest levels — no cliff", () => {
+    const base = { ...DEFAULT_INPUTS, avgLoanBalance: 50000, loanPenetrationRate: 1 };
+    const niiAt0   = computeNIIContribution(1000, { ...base, avgDepositBalance: 1 },     INSTITUTION);
+    const niiAt5k  = computeNIIContribution(1000, { ...base, avgDepositBalance: 5000 },  INSTITUTION);
+    const niiAt10k = computeNIIContribution(1000, { ...base, avgDepositBalance: 10000 }, INSTITUTION);
+
+    expect(niiAt5k).toBeGreaterThan(niiAt0);
+    expect(niiAt10k).toBeGreaterThan(niiAt5k);
+
+    // The size of the step from $0→$5k should be the same order of magnitude as $5k→$10k —
+    // a smooth funding-gap slope, not a step function that jumps once deposits appear at all.
+    const step1 = niiAt5k - niiAt0;
+    const step2 = niiAt10k - niiAt5k;
+    expect(step2 / step1).toBeGreaterThan(0.5);
+    expect(step2 / step1).toBeLessThan(2);
+  });
+
+  it("a deposit-heavy surplus earns the investment yield rather than nothing", () => {
+    const inputs = { ...DEFAULT_INPUTS, avgDepositBalance: 50000, avgLoanBalance: 0, loanPenetrationRate: 0 };
+    const nii = computeNIIContribution(1000, inputs, INSTITUTION);
+    expect(nii).toBeGreaterThan(0);
+  });
+
+  it("higher wholesaleFundingRate deepens the cost of a loan-heavy gap", () => {
+    const base = { ...DEFAULT_INPUTS, avgDepositBalance: 0, avgLoanBalance: 50000, loanPenetrationRate: 1 };
+    const low  = computeNIIContribution(1000, { ...base, wholesaleFundingRate: 2 }, INSTITUTION);
+    const high = computeNIIContribution(1000, { ...base, wholesaleFundingRate: 8 }, INSTITUTION);
+    expect(high).toBeLessThan(low);
+  });
+
+  it("higher investmentYieldRate increases income from a deposit-heavy surplus", () => {
+    const base = { ...DEFAULT_INPUTS, avgDepositBalance: 50000, avgLoanBalance: 0, loanPenetrationRate: 0 };
+    const low  = computeNIIContribution(1000, { ...base, investmentYieldRate: 1 }, INSTITUTION);
+    const high = computeNIIContribution(1000, { ...base, investmentYieldRate: 6 }, INSTITUTION);
+    expect(high).toBeGreaterThan(low);
   });
 });
 
@@ -628,9 +721,11 @@ describe("computeModelHealth", () => {
     expect(h.niiCoverageRatio).toBeNull();
   });
 
-  it("NII coverage is well above 3× at defaults (NII dwarfs rate premium)", () => {
+  it("NII coverage is positive at defaults", () => {
+    // Under the funds-transfer-priced formula this is a more conservative figure than the old
+    // deposit-only NIM proxy produced — it's no longer assumed to dwarf the rate premium.
     const h = computeModelHealth(DEFAULT_INPUTS, INST);
-    expect(h.niiCoverageRatio).toBeGreaterThan(3);
+    expect(h.niiCoverageRatio).toBeGreaterThan(0);
   });
 
   it("annual cannibalization drag scales linearly with institution asset size", () => {

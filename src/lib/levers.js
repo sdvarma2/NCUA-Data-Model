@@ -43,7 +43,7 @@ export const LEVER_PRESETS = {
     },
     Balanced: {
       samPct: 40,
-      avgDepositBalance: 18000,
+      avgDepositBalance: 8000,
       loanPenetrationRate: 0.12,
       avgLoanBalance: 22000,
       digitalAttritionYear1: 0.18,

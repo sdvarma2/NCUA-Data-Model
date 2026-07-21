@@ -513,7 +513,9 @@ const SECTIONS = [
     id: "deposits",
     label: "Deposits",
     fields: [
-      { key: "avgDepositBalance",  label: "Avg Deposit Balance",                              unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000 },
+      { key: "avgDepositBalance",  label: "Avg Deposit Balance",                              unit: "$ / member",     scale: 1,   precision: 0, step: 500,  min: 1000,  max: 100000,
+        tooltip: "NCUA call report data puts the credit union average deposit balance per member at roughly $16,000 (assets per member, net of net worth). This default applies a 50% haircut to that figure — not itself data-supported — since newly acquired digital members typically don't move their full balance to a new institution right away.",
+      },
       { key: "rateBump",         label: "Initial Rate Bump",  unit: "bps",      scale: 1, precision: 0, step: 5, min: 0, max: 300,
         tooltip: "The Initial Rate Bump represents the premium you'll pay on deposits initially to attract new members." },
       { key: "ratePremiumDecay", label: "Rate Bump Decay",    unit: "bps / yr", scale: 1, precision: 0, step: 1, min: 0, max: 50,
@@ -609,10 +611,42 @@ const SECTIONS = [
     ],
   },
   {
+    id: "funding",
+    label: "Funding",
+    fields: [
+      { key: "wholesaleFundingRate", label: "Wholesale Funding Rate", unit: "%", scale: 1, precision: 2, step: 0.05, min: 0, max: 15,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              Digital deposits and digital loans rarely grow 1:1. When digital loan balances outrun digital deposit balances, the shortfall has to be funded some other way — typically FHLB advances or brokered deposits. This rate prices that gap instead of silently assuming it&rsquo;s free.
+            </p>
+            <p>
+              Default 3.85% ≈ SOFR (3.60%) + 25bps, a typical short-term FHLB-advance/brokered-deposit spread over the overnight rate, sourced 2026-07-15 from the NY Fed (SOFR, 2026-07-13). Update this as market rates move.
+            </p>
+          </>
+        ),
+      },
+      { key: "investmentYieldRate", label: "Investment Yield Rate", unit: "%", scale: 1, precision: 2, step: 0.05, min: 0, max: 15,
+        tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
+        tooltip: (
+          <>
+            <p className="mb-2">
+              When digital deposit balances outrun digital loan balances, the surplus doesn&rsquo;t just sit idle — it gets redeployed into short-term investments (overnight Fed Funds, agency securities). This rate prices that surplus instead of letting it earn nothing in the model.
+            </p>
+            <p>
+              Default 3.62% = Fed Funds effective rate, sourced 2026-07-15 from the NY Fed (EFFR, 2026-07-13). Update this as market rates move.
+            </p>
+          </>
+        ),
+      },
+    ],
+  },
+  {
     id: "servicing",
     label: "Servicing Cost",
     fields: [
-      { key: "maintenanceTrad",    label: "Account Maintenance — Traditional",  unit: "$ / member / yr", scale: 1, precision: 0, step: 10, min: 0, max: 1000,
+      { key: "maintenanceTrad",    label: "Account Maintenance — Traditional", unit: "$ / member / yr", scale: 1, precision: 0, step: 10, min: 0, max: 1000,
         tooltipClassName: "w-80 max-w-[calc(100vw-2rem)]",
         tooltip: (
           <>

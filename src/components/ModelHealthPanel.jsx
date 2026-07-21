@@ -178,9 +178,9 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
   ]);
 
   const coverageStatus = statusOf(h.niiCoverageRatio, [
-    { min: 3,            status: "green" },
-    { min: 1.5, max: 2.99, status: "amber" },
-    { max: 1.49,         status: "red"   },
+    { min: 1.5,             status: "green" },
+    { min: 0.75, max: 1.49, status: "amber" },
+    { max: 0.74,            status: "red"   },
   ]);
 
   const cannibStatus = statusOf(h.cannibDragAsPctOfNII, [
@@ -260,7 +260,8 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           label="Gross Interest Income"
           value={`$${Math.round(h.monthlyNIIper1000).toLocaleString()}`}
           status="neutral"
-          tooltip="Estimated gross interest income earned on digital member deposit and loan balances per 1,000 members per month, using the institution's NIM as the earning rate. This is the raw interest spread before subtracting the rate premium concession."
+          tooltip="Funds-transfer-priced spread per 1,000 digital members per month: loan balances earn the hybrid-cohort asset yield (net of the loan rate cut), deposit balances cost the hybrid-cohort dividend rate (plus the deposit rate bump), and the loan/deposit funding gap is priced at a market rate rather than assumed away — a loan-heavy gap is funded at the Wholesale Funding Rate (Advanced Settings → Funding; default 3.85%, ≈ SOFR + 25bps as of 2026-07-13), a deposit-heavy surplus earns the Investment Yield Rate (default 3.62%, Fed Funds effective rate as of 2026-07-13). This is why pushing deposits toward zero while loans stay high doesn't just shrink this number toward zero — the unfunded loan balance still carries a wholesale funding cost."
+          tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
         />
         <HealthRow
           label="Rate Premium Cost"
@@ -271,8 +272,8 @@ export default function ModelHealthPanel({ inputs, footprintInputs, scenario, in
           label="Interest Income Coverage Ratio"
           value={h.niiCoverageRatio == null ? "—" : `${h.niiCoverageRatio.toFixed(1)}×`}
           status={coverageStatus}
-          hint="target > 3×"
-          tooltip="Gross interest income divided by rate premium cost — how many times does the interest earned on digital balances cover the rate concession paid out. A ratio above 3× means the NIM comfortably absorbs the premium and still leaves meaningful spread. Below 1.5× the program earns less interest than it gives away in rate concessions."
+          hint="target > 1.5×"
+          tooltip="Gross interest income divided by rate premium cost — how many times does the interest earned on digital balances cover the rate concession paid out. Above 1.5× the interest earned comfortably absorbs the rate concession with room to spare. Below 0.75× the program earns less interest than it gives away in rate concessions."
           tooltipClassName="w-80 max-w-[calc(100vw-2rem)]"
         />
       </div>

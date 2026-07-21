@@ -20,7 +20,12 @@ export const DEFAULT_INPUTS = {
   monthsToSteadyState: 60,   // months; network effects take longer than one planning cycle for new-market CUs
 
   // Deposits
-  avgDepositBalance: 18000,
+  // NCUA call report data (see ncua_model_data.json) puts institution-wide
+  // deposits/member at a median of ~$16k (assets/member net of net worth ratio).
+  // Newly acquired digital members don't arrive with a full back-book balance,
+  // so this applies a 50% haircut to that figure — not itself data-supported,
+  // but directionally consistent with neobank early-funding disclosures.
+  avgDepositBalance: 8000,
   rateBump: 50,          // bps above standard rate offered to digital members
   ratePremiumDecay: 10,  // bps/year the premium erodes as competitors catch up
   rateBumpFloor: 25,     // bps — decay stops here; rate advantage persists at this floor
@@ -29,6 +34,14 @@ export const DEFAULT_INPUTS = {
   loanPenetrationRate: 0.10,  // conservative 5-yr avg; SoFi ~20% after years of brand-building sets ceiling
   avgLoanBalance: 10000,
   rateCut: 25,           // bps below standard rate offered to digital members
+
+  // Funding — prices the loan/deposit funding gap (see computeNIIContribution) at market
+  // rates instead of assuming deposits and loans always fund each other 1:1.
+  // Sourced 2026-07-15: Fed Funds effective rate 3.62% (NY Fed EFFR, 2026-07-13);
+  // SOFR 3.60% (NY Fed, 2026-07-13). Wholesale funding approximated as SOFR + ~25bps,
+  // a typical short-term FHLB-advance/brokered-deposit spread over the overnight rate.
+  wholesaleFundingRate: 3.85,  // % — cost of funding a loan-heavy gap (FHLB advances / brokered deposits)
+  investmentYieldRate: 3.62,   // % — yield earned on a deposit-heavy surplus (overnight Fed Funds)
 
   // Cannibalization (applied to institution's existing balance sheet)
   depositCannibRateA: 0.005,  // 0.5%/yr of existing deposits in Scenario A
@@ -524,13 +537,22 @@ export function computeServicingDelta(totalDigitalMembers, inputs) {
 }
 
 /**
+ * Effective deposit rate bump (bps) at a given month, after decay toward the floor.
+ * Shared by computeRatePremiumCost (cost side) and computeNIIContribution (income
+ * side) so both agree on what's actually being paid to depositors at that month.
+ */
+function effectiveRateBump(inputs, month) {
+  const decayPerMonth = inputs.ratePremiumDecay / 12;
+  const floor = inputs.rateBumpFloor ?? 0;
+  return Math.max(floor, inputs.rateBump - (month - 1) * decayPerMonth);
+}
+
+/**
  * Monthly rate premium cost — deposit rate bump + loan rate discount paid on
  * the entire active digital member base.
  */
 export function computeRatePremiumCost(totalDigitalMembers, inputs, month) {
-  const decayPerMonth = inputs.ratePremiumDecay / 12;
-  const floor = inputs.rateBumpFloor ?? 0;
-  const effectiveBump = Math.max(floor, inputs.rateBump - (month - 1) * decayPerMonth);
+  const effectiveBump = effectiveRateBump(inputs, month);
 
   const depositPremiumPerMemberPerMonth =
     inputs.avgDepositBalance * (effectiveBump / 10000) / 12;
@@ -556,12 +578,57 @@ export function computeCannibalCost(institution, inputs, scenario) {
 }
 
 /**
- * Monthly net interest income from digital members.
- * Uses hybrid_nim_p50 as the NIM proxy — hybrid institutions have already achieved
- * digital density, so their NIM reflects the economics of a digitally-oriented member base.
+ * Monthly net interest income from digital members — priced as a funds-transfer
+ * spread rather than a single blended NIM applied only to deposits:
+ *
+ *   1. Loan leg (income): digital loan balances earn the hybrid-benchmark asset
+ *      yield, net of the rate cut given to digital borrowers.
+ *   2. Deposit leg (cost): digital deposit balances cost the hybrid-benchmark
+ *      dividend rate, plus the rate bump paid to digital depositors (using the
+ *      same decayed bump as computeRatePremiumCost).
+ *   3. Funding gap: digital deposits and digital loans rarely grow 1:1. The
+ *      imbalance is priced at a market rate rather than assumed away — a
+ *      loan-heavy gap is funded at the wholesale borrowing rate (FHLB advances /
+ *      brokered deposits); a deposit-heavy surplus is invested at the overnight
+ *      investment yield (Fed Funds). This is standard funds-transfer-pricing
+ *      (FTP) logic and is what keeps the model honest when deposits and loans
+ *      are set far apart (e.g. near-zero deposits with a large loan book still
+ *      costs a large funding gap, instead of showing near-zero income).
+ *
+ * Uses institution.hybrid_nim_p50 / hybrid_div_rate_p50 (hybrid-cohort benchmarks),
+ * not the institution's own nim_pct / dividend_rate_pct — hybrid institutions have
+ * already achieved digital density, so their pricing reflects a digitally-oriented
+ * member base. The dataset has no separate hybrid-benchmark asset yield, so loan
+ * yield is derived as hybrid_nim_p50 + hybrid_div_rate_p50 (NIM = yield − cost of
+ * funds).
+ *
+ * @param {number} month  1-based month, used to decay the deposit rate bump the
+ *                         same way computeRatePremiumCost does. Defaults to 1
+ *                         (no decay yet) for point-in-time callers like
+ *                         computeModelHealth.
  */
-export function computeNIIContribution(totalDigitalMembers, inputs, institution) {
-  return totalDigitalMembers * inputs.avgDepositBalance * (institution.hybrid_nim_p50 / 100) / 12;
+export function computeNIIContribution(totalDigitalMembers, inputs, institution, month = 1) {
+  const effectiveBumpBps = effectiveRateBump(inputs, month);
+
+  const perMemberLoanBalance    = inputs.avgLoanBalance * inputs.loanPenetrationRate;
+  const perMemberDepositBalance = inputs.avgDepositBalance;
+
+  const loanYieldRate   = (institution.hybrid_nim_p50 + institution.hybrid_div_rate_p50) / 100
+    - inputs.rateCut / 10000;
+  const depositCostRate = institution.hybrid_div_rate_p50 / 100 + effectiveBumpBps / 10000;
+
+  const loanIncomePerMemberYr  = perMemberLoanBalance * loanYieldRate;
+  const depositCostPerMemberYr = perMemberDepositBalance * depositCostRate;
+
+  // Positive gap = loans outrun deposits (funding shortfall); negative = deposit surplus.
+  const fundingGapPerMember = perMemberLoanBalance - perMemberDepositBalance;
+  const fundingAdjustmentPerMemberYr = fundingGapPerMember > 0
+    ? -fundingGapPerMember * (inputs.wholesaleFundingRate / 100)
+    : -fundingGapPerMember * (inputs.investmentYieldRate / 100);
+
+  const netSpreadPerMemberYr = loanIncomePerMemberYr - depositCostPerMemberYr + fundingAdjustmentPerMemberYr;
+
+  return totalDigitalMembers * netSpreadPerMemberYr / 12;
 }
 
 /**
@@ -675,9 +742,9 @@ export function computeModelHealth(inputs, institution) {
     + inputs.avgLoanBalance * inputs.loanPenetrationRate * (inputs.rateCut / 10000);
 
   // 3. Monthly gross NII per 1,000 digital members.
-  //    Uses hybrid_nim_p50 — same proxy as computeNIIContribution.
-  const monthlyNIIper1000 =
-    1000 * inputs.avgDepositBalance * (institution.hybrid_nim_p50 / 100) / 12;
+  //    Delegates to computeNIIContribution — see that function for the funds-transfer
+  //    spread methodology (loan leg + deposit leg + funding-gap adjustment).
+  const monthlyNIIper1000 = computeNIIContribution(1000, inputs, institution);
 
   // 4. Monthly rate premium cost per 1,000 digital members (annualised ÷ 12).
   const monthlyRatePremiumPer1000 = ratePremiumPerMemberYr * 1000 / 12;
@@ -761,7 +828,7 @@ function runStream(institution, inputs, bassGrossCurve) {
       monthlyAcquisitionSpend:    newMembersGross * cpa,
       monthlyRatePremiumCost:     computeRatePremiumCost(totalActiveMembers, inputs, m),
       monthlyServicingCostSavings: computeServicingDelta(totalActiveMembers, inputs),
-      monthlyGrossNII:            computeNIIContribution(totalActiveMembers, inputs, institution),
+      monthlyGrossNII:            computeNIIContribution(totalActiveMembers, inputs, institution, m),
     });
   }
 
